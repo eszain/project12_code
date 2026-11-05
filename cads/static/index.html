@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CADS MVP</title>
+<style>
+body{font:14px system-ui,sans-serif;margin:0;background:#f5f6f8;color:#1b1f24}
+header{background:#12263f;color:#fff;padding:10px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+header h1{font-size:16px;margin:0 8px 0 0}main{padding:16px;max-width:1300px;margin:auto}
+button{padding:6px 12px;cursor:pointer}table{border-collapse:collapse;width:100%;background:#fff}
+th,td{border:1px solid #d6dae0;padding:5px 8px;text-align:left;vertical-align:top}th{background:#e9edf2}
+tr.ev:hover{background:#eef4ff;cursor:pointer}.card{background:#fff;border:1px solid #d6dae0;padding:12px;margin:12px 0}
+.ACTION{font-weight:700;color:#b00020}.WATCH{font-weight:700;color:#8a5a00}.muted{color:#777}.pill{font-size:12px;padding:1px 6px;border:1px solid #888;border-radius:8px}
+.warn{background:#fff6dd;border:1px solid #e0c46a;padding:6px 10px}ul{margin:0;padding-left:16px}
+</style></head><body>
+<header><h1>CADS &ndash; Conjunction decision support (MVP)</h1>
+<button onclick="demo()">1. Load data</button>
+<button onclick="analyze()">2. Run risk analysis</button>
+<button onclick="reset()">Reset</button>
+<label>or upload CDM files: <input type="file" id="up" multiple onchange="upload()"></label>
+<a href="/docs" style="color:#9cf">API docs</a></header>
+<main>
+<div class="warn">Severity is rated from the source Pc exactly as reported in each CDM. Recalculated values are experimental. CADS does not command spacecraft.</div>
+<div class="card"><b>Events</b> <span id="msg" class="muted"></span>
+<table><thead><tr><th>Objects</th><th>TCA (UTC)</th><th>h to TCA</th><th>Latest source Pc</th><th>Miss (m)</th><th>CDMs</th><th>Data</th><th>Severity</th><th>Why</th></tr></thead><tbody id="events"></tbody></table></div>
+<div id="detail"></div>
+<div class="card"><b>Alerts</b> <button onclick="dispatch()">Deliver now</button><div id="alerts"></div></div>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+let analysis={};
+const j=async(u,o)=>{const r=await fetch(u,o);if(!r.ok)throw new Error(r.status+' '+await r.text());return r.json()};
+const esc=s=>String(s??'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const run=async f=>{try{await f()}catch(e){$('msg').textContent='Error: '+e.message}};
+const demo=()=>run(async()=>{const r=await j('/api/import/demo',{method:'POST'});analysis={};$('msg').textContent='Loaded '+r.counts.imported+' CDMs (sample dates shifted by '+r.shift_hours+' h). Now run the risk analysis.';await refresh()});
+const analyze=()=>run(async()=>{analysis=await j('/api/analyze',{method:'POST'});$('msg').textContent='Analysis done.';await refresh()});
+const reset=()=>run(async()=>{if(!confirm('Clear the table and all rules/alerts?'))return;await j('/api/reset',{method:'POST'});analysis={};$('detail').innerHTML='';$('msg').textContent='Reset.';await refresh()});
+const dispatch=()=>run(async()=>{await j('/api/alerts/dispatch',{method:'POST'});await refresh()});
+const upload=()=>run(async()=>{const f=new FormData();for(const x of $('up').files)f.append('files',x);const r=await j('/api/import',{method:'POST',body:f});analysis={};
+ $('msg').textContent=JSON.stringify(r.counts)+' '+r.records.filter(x=>x.errors.length).map(x=>x.file_name+': '+x.errors.join('; ')).join(' | ');await refresh()});
+async function refresh(){
+ const ev=await j('/api/events');
+ $('events').innerHTML=ev.map(e=>{const a=analysis[e.id];return `<tr class="ev" onclick="show(${e.id})"><td>${esc(e.primary.name||e.primary.designator)} / ${esc(e.secondary.name||e.secondary.designator)}</td><td>${e.tca}</td><td>${e.hours_to_tca.toFixed(1)}${e.tca_passed?' (passed)':''}</td><td>${esc(e.pc.raw??'not provided')}</td><td>${e.miss_distance_m}</td><td>${e.revision_count}</td><td>${e.data_labels.map(l=>`<span class="pill">${esc(l)}</span>`).join(' ')}</td>`+
+  (a?`<td class="${a.severity}">${a.severity}</td><td><ul>${a.why.map(w=>`<li>${esc(w)}</li>`).join('')}</ul></td>`:`<td class="muted">&mdash;</td><td class="muted">run risk analysis</td>`)+'</tr>'}).join('')||'<tr><td colspan=9 class="muted">Empty. Press "1. Load data" or upload CDM files.</td></tr>';
+ const al=await j('/api/alerts');
+ $('alerts').innerHTML=al.length?'<table><tr><th>When</th><th>Rule</th><th>Event</th><th>Severity</th><th>Deliveries</th></tr>'+al.map(a=>`<tr><td>${a.created_at}</td><td>${esc(a.rule.name)}</td><td>${a.event_id}</td><td>${a.severity}</td><td>${a.deliveries.map(d=>d.channel_type+': '+d.status+' ('+d.attempts+')').join(', ')}</td></tr>`).join('')+'</table>':'<p class="muted">No alerts.</p>'}
+async function show(id){
+ const e=await j('/api/events/'+id),a=await j(`/api/events/${id}/analysis`);
+ const rc=a.recalculation;
+ $('detail').innerHTML=`<div class="card"><b>Event ${esc(e.event_key)}</b> &ndash; ${e.revision_count} CDM revision(s)
+ <table><tr><th>Created (UTC)</th><th>TCA</th><th>Source Pc</th><th>Change</th><th>Miss (m)</th><th>Rel. speed (m/s)</th><th>Source file</th></tr>${e.revisions.map(r=>`<tr><td>${r.creation_date}</td><td>${r.tca}</td><td>${esc(r.pc.raw??'not provided')} <small>(${r.pc.meaning})</small></td><td>${r.change_from_previous?r.change_from_previous.pc_direction+', TCA '+r.change_from_previous.tca_shift_s.toFixed(2)+' s':'first'}</td><td>${r.miss_distance_m}</td><td>${r.relative_speed_ms}</td><td>${esc(r.source.file)}</td></tr>`).join('')}</table>
+ <p><b>Experimental recalculation of latest CDM:</b> ${rc.available?`Pc ${rc.recalculated_pc.toExponential(3)} (HBR ${rc.hbr_m.toFixed(2)} m) &ndash; ${esc(rc.status)}`:'unavailable: '+esc(rc.reason)}</p></div>`}
+refresh();
+</script></body></html>

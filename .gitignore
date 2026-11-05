@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+build/
+dist/
+
+# Local runtime state (SQLite database, notification outbox files)
+var/
+*.db
+*.db-journal
+
+# Local configuration and credentials: never commit (NFR04)
+.env
+
+# Original Space-Track / CSA sample files: check redistribution permission with CSA before committing
+data/samples/space-track/*.json
+data/samples/space-track/*.kvn
+data/samples/space-track/*.txt

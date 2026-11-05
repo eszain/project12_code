@@ -1,0 +1,15 @@
+{
+  "reconstructed": [
+    "cdm_set_1.json",
+    "cdm_set_2.json",
+    "cdm_set_3.json",
+    "cdm_set_4.json",
+    "cdm_set_5.json",
+    "cdm_set_6.json"
+  ],
+  "synthetic": [
+    "synthetic_high_risk_1.json",
+    "synthetic_high_risk_2.json",
+    "synthetic_high_risk_3.json"
+  ]
+}
