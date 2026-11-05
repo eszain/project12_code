@@ -15,6 +15,8 @@ The page starts empty (the database is wiped on every start; set `CADS_PERSIST=t
 
 ## Web app (Next.js, runs entirely in the browser): `web/`
 
+Live demo: https://project12-code.vercel.app (also https://project12code.vercel.app)
+
 Same workflow as the Python app, but the core logic (parser, grouping, severity, experimental Pc, maneuver trade, alerts) is a TypeScript port that runs in the browser tab. Nothing is stored or sent anywhere; refresh or **Reset** clears it. UI: Next.js 16, Tailwind, shadcn and Animate UI components, light/dark/system theme toggle.
 
 ```
