@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { analyzeEvent } from "./analyze";
+import { analyzeEvent, formatDistance, formatOdds, formatShortOdds, formatSpeed } from "./analyze";
 import { groupMessages } from "./correlation";
 import { loadDemoDocuments } from "./demo";
 import { tradeStudy } from "./maneuver";
@@ -100,6 +100,30 @@ describe("store, alerts and analysis (AC03)", () => {
     const sev = events.map((e) => analyzeEvent(e, now)).sort((a, b) => a.severity.localeCompare(b.severity));
     expect(sev.map((x) => x.severity)).toEqual(["ACTION", "ZERO", "ZERO"]);
     expect(sev.every((x) => x.why.length >= 4)).toBe(true);
+
+    // Verify ELI5 math explanation and severity rationale
+    const action = sev.find((x) => x.severity === "ACTION")!;
+    expect(action.why.some((w) => w.includes("The Math in Simple Terms"))).toBe(true);
+    expect(action.why.some((w) => w.includes("ACTION — High Collision Danger"))).toBe(true);
+    expect(action.why.some((w) => w.includes("uncertainty cloud"))).toBe(true);
+    expect(action.why.some((w) => w.includes("1 in 10,000"))).toBe(true);
+    expect(action.why.some((w) => w.includes("1 in 2,571"))).toBe(true);
+    expect(action.why.some((w) => w.includes("Flyby Timing"))).toBe(true);
+    expect(action.why.some((w) => w.includes("Risk Trend"))).toBe(true);
+
+    const zero = sev.find((x) => x.severity === "ZERO")!;
+    expect(zero.why.some((w) => w.includes("Latest CDM reports Pc exactly 0"))).toBe(true);
+    expect(zero.why.some((w) => w.includes("0% overlap"))).toBe(true);
+  });
+
+  it("formats odds, distances, and speeds for a non-technical audience", () => {
+    expect(formatOdds(0)).toBe("0% (zero chance of collision)");
+    expect(formatOdds(3.888786e-4)).toBe("1 in 2,571 (0.04%)");
+    expect(formatOdds(1e-6)).toBe("1 in 1 million (less than 0.001%)");
+    expect(formatShortOdds(3.888786e-4)).toBe("1 in 2,571");
+    expect(formatShortOdds(0)).toBe("0%");
+    expect(formatDistance(62)).toContain("football field");
+    expect(formatSpeed(12793)).toContain("Mach");
   });
 });
 

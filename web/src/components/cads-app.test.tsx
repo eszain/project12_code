@@ -31,10 +31,12 @@ it("starts empty, loads data, analyses with reasons, and resets", async () => {
   await user.click(screen.getByRole("button", { name: /Run risk analysis/ }));
   await waitFor(() => expect(events().getAllByText("ACTION")).toHaveLength(1));
   expect(events().getAllByText("ZERO")).toHaveLength(2);
-  expect(screen.getAllByText(/Latest CDM reports Pc exactly 0/)).toHaveLength(2);
 
+  // Pressing an event row displays the Explanation section with LaTeX math work and ELI5 explanation
   await user.click(screen.getAllByRole("button", { name: /CADS TEST SAT/ })[0]);
-  expect(await screen.findByText(/CDM revisions/)).toBeTruthy();
+  expect(await screen.findByText(/Explanation:/)).toBeTruthy();
+  expect(screen.getByText(/The Math/)).toBeTruthy();
+  expect(screen.getByText(/Quick Summary/)).toBeTruthy();
 
   await user.click(screen.getByRole("button", { name: "Reset" }));
   await waitFor(() => expect(screen.getByText(/Empty\. Press/)).toBeTruthy());
