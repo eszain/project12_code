@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { analyzeEvent, formatDistance, missComponentsM, phoneSummary, formatOdds, formatShortOdds, formatSpeed } from "./analyze";
 import { groupMessages } from "./correlation";
-import { loadDemoDocuments } from "./demo";
+import { loadDemoDocuments, sortByCreation } from "./demo";
 import { tradeStudy } from "./maneuver";
 import { parseDocument } from "./parser";
 import { recalculate } from "./pc";
@@ -248,5 +248,26 @@ describe("operator phone summary (C1)", () => {
   it("marks a debris object", () => {
     const x = c();
     expect(phoneSummary({ ...x, sat2: { ...x.sat2, objectType: "DEBRIS" } }, x.tca)).toContain(`${x.sat2.name ?? x.sat2.designator} (debris)`);
+  });
+});
+
+describe("one-at-a-time loading (D2)", () => {
+  const all = () => ["reconstructed", "synthetic"].flatMap((f) => readdirSync(join(DATA, f)).filter((n) => n.endsWith(".json")).map((n) => ({ name: n, content: read(f, n), label: f })));
+  it("orders documents by CDM creation date, oldest first, with unparseable ones last", () => {
+    const junk = { name: "junk.txt", content: "not a cdm", label: "x" };
+    const shuffled = [junk, ...all().reverse()];
+    const out = sortByCreation(shuffled);
+    const times = out.slice(0, -1).map((d) => parseDocument(d.content, d.name)[0].cdm!.creationDate);
+    expect(times).toEqual([...times].sort((a, b) => a - b));
+    expect(out[out.length - 1].name).toBe("junk.txt");
+  });
+  it("importing one document at a time gives the same events as importing them all at once", () => {
+    const one = new Store();
+    sortByCreation(all()).forEach((d) => one.importDocuments([d]));
+    const bulk = new Store();
+    bulk.importDocuments(all());
+    // Compare the grouping (which files form each event, in order); the event key is named after the first CDM to arrive, so it can differ.
+    const shape = (s: Store) => s.getSnapshot().events.map((e) => e.revisions.map((r) => r.sourceFile).join(",")).sort();
+    expect(shape(one)).toEqual(shape(bulk));
   });
 });

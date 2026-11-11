@@ -16,15 +16,27 @@ beforeAll(() => {
 });
 afterEach(cleanup);
 
+it("loads the CDMs one at a time, oldest first, counting them in the status line", async () => {
+  const user = userEvent.setup();
+  render(<CadsApp stepDelayMs={40} />);
+  await user.click(screen.getByRole("button", { name: /Load data/ }));
+  await waitFor(() => expect(screen.getByText(/Loading CDM 2 of 9/)).toBeTruthy()); // still in progress: not all at once
+  expect(screen.getByRole("button", { name: /Load data/ })).toHaveProperty("disabled", true); // no second load while one is running
+  expect(within(screen.getByRole("list", { name: "Event list" })).getAllByRole("listitem").length).toBeLessThan(3);
+  await waitFor(() => expect(screen.getByText(/Loaded 9 CDMs one at a time, oldest first/)).toBeTruthy(), { timeout: 3000 });
+  expect(within(screen.getByRole("list", { name: "Event list" })).getAllByRole("listitem")).toHaveLength(3);
+});
+
 it("starts empty, loads data, analyses with reasons, and resets", async () => {
   const user = userEvent.setup();
-  render(<CadsApp />);
+  render(<CadsApp stepDelayMs={0} />);
   expect(screen.getByText(/Empty\. Press/)).toBeTruthy();
   expect(screen.getByRole("button", { name: /Run risk analysis/ })).toHaveProperty("disabled", true);
 
   await user.click(screen.getByRole("button", { name: /Load data/ }));
   const list = () => within(screen.getByRole("list", { name: "Event list" }));
-  await waitFor(() => expect(list().getAllByRole("listitem")).toHaveLength(3)); // 3 events
+  await waitFor(() => expect(screen.getByText(/Loaded 9 CDMs one at a time/)).toBeTruthy()); // loading finished (analysis is disabled until then)
+  expect(list().getAllByRole("listitem")).toHaveLength(3); // 3 events
   expect(screen.getAllByText("run risk analysis")).toHaveLength(3); // severity not shown yet
   expect(list().queryByText("ACTION")).toBeNull();
 

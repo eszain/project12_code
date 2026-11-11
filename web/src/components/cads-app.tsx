@@ -2,7 +2,7 @@
 
 import { Monitor, Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { GradientBackground } from "@/components/animate-ui/backgrounds/gradient";
 import { LiquidButton } from "@/components/animate-ui/buttons/liquid";
@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { CdmHistory } from "./cdm-history";
 import { ExplanationCard } from "./explanation-card";
 import { analyzeEvent, type EventAnalysis } from "@/lib/cads/analyze";
-import { loadDemoDocuments } from "@/lib/cads/demo";
+import { loadDemoDocuments, sortByCreation } from "@/lib/cads/demo";
 import { CONFIG, Store, latestRevision, type Snapshot } from "@/lib/cads/store";
 
 const EMPTY: Snapshot = { events: [], rules: [], alerts: [] };
@@ -37,7 +37,9 @@ function ThemeToggle() {
   );
 }
 
-export function CadsApp() {
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+export function CadsApp({ stepDelayMs = 900 }: { stepDelayMs?: number } = {}) {
   const [store] = useState(() => new Store());
   const snap = useSyncExternalStore(store.subscribe, store.getSnapshot, () => EMPTY);
   const [analysis, setAnalysis] = useState<Record<number, EventAnalysis> | null>(null);
@@ -48,6 +50,13 @@ export function CadsApp() {
   const [view, setView] = useState<"operator" | "specialist">("operator");
   // "Now" lives in state (refreshed by every action) because reading the clock during render is not allowed here.
   const [now, setNow] = useState(0);
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
 
   const run = async (fn: () => Promise<string> | string) => {
     setBusy(true);
@@ -65,14 +74,26 @@ export function CadsApp() {
     if (!store.getSnapshot().rules.length) store.addRule({ name: "Pc >= 1e-4 (CSA action level)", pcMin: CONFIG.pcAction, missDistanceMaxM: null, hoursToTcaMax: null, objectIds: [] });
   };
 
+  // D2: feed the CDMs in creation order, one at a time; each is fully stored (and alert rules evaluated) before the next.
   const loadData = () =>
     run(async () => {
       const { docs, shiftHours } = await loadDemoDocuments();
       ensureDefaultRule();
-      const r = store.importDocuments(docs);
       setAnalysis(null);
       setSelected(null);
-      return `Loaded ${r.counts.imported} CDMs (${r.counts.duplicate} repeats ignored); sample dates shifted by ${shiftHours} h so the encounters are upcoming. Now run the risk analysis.`;
+      const ordered = sortByCreation(docs);
+      const total = { imported: 0, duplicate: 0, rejected: 0 };
+      for (let i = 0; i < ordered.length; i++) {
+        if (!alive.current) return "Loading stopped.";
+        setNow(Date.now());
+        setStatus(`Loading CDM ${i + 1} of ${ordered.length}: ${ordered[i].name}`);
+        const r = store.importDocuments([ordered[i]]);
+        total.imported += r.counts.imported;
+        total.duplicate += r.counts.duplicate;
+        total.rejected += r.counts.rejected;
+        if (i < ordered.length - 1) await sleep(stepDelayMs);
+      }
+      return `Loaded ${total.imported} CDMs one at a time, oldest first (${total.duplicate} repeats ignored); sample dates shifted by ${shiftHours} h so the encounters are upcoming. Now run the risk analysis.`;
     });
 
   const runAnalysis = () =>

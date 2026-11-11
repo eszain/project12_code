@@ -2,6 +2,8 @@
 // so the encounters are upcoming. The files live in public/fixtures (reconstructed + synthetic,
 // see PROVENANCE.md there); nothing is embedded in the code.
 
+import { parseDocument } from "./parser";
+
 const FIXTURE_NOW = Date.UTC(2026, 1, 26, 15, 0, 0); // "now" inside the sample data (just after the last sample CDM)
 const SHIFT = new Set(["CREATION_DATE", "TCA", "INSERT_EPOCH", "TIME_LASTOB_START", "TIME_LASTOB_END"]);
 
@@ -28,4 +30,13 @@ export async function loadDemoDocuments(nowMs = Date.now()): Promise<{ docs: { n
     }
   }
   return { docs, shiftHours: Math.round(delta / 360000) / 10 };
+}
+
+/**
+ * Orders documents by the creation date of the CDM they contain (oldest first), the way CDMs reach an
+ * operator in real use. Documents that cannot be parsed go last, in their original order.
+ */
+export function sortByCreation<T extends { name: string; content: string }>(docs: T[]): T[] {
+  const key = (d: T) => parseDocument(d.content, d.name).find((r) => r.cdm)?.cdm?.creationDate ?? Infinity;
+  return docs.map((d, i) => ({ d, k: key(d), i })).sort((a, b) => a.k - b.k || a.i - b.i).map((x) => x.d);
 }
