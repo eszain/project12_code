@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { analyzeEvent, formatDistance, missComponentsM, formatOdds, formatShortOdds, formatSpeed } from "./analyze";
+import { analyzeEvent, formatDistance, missComponentsM, phoneSummary, formatOdds, formatShortOdds, formatSpeed } from "./analyze";
 import { groupMessages } from "./correlation";
 import { loadDemoDocuments } from "./demo";
 import { tradeStudy } from "./maneuver";
@@ -225,5 +225,28 @@ describe("CDM history and trend (B1, B2)", () => {
   it("has no axis when no CDM has a non-zero Pc", () => {
     const pts = trendPoints(history()).map((p) => ({ ...p, pc: 0 }));
     expect(pcAxis(pts)).toBeNull();
+  });
+});
+
+describe("operator phone summary (C1)", () => {
+  const c = () => cdm("reconstructed", "cdm_set_1.json");
+  const H = 3600000;
+  it("names both objects, the time to TCA and the collision chance", () => {
+    const x = c();
+    const text = phoneSummary(x, x.tca - 13 * H);
+    expect(text).toContain("closest approach in 13.0 hours");
+    expect(text).toContain(`collision chance ${formatShortOdds(x.pc)}`);
+    expect(text).toContain(x.sat1.name ?? x.sat1.designator);
+    expect(text).toContain(x.sat2.name ?? x.sat2.designator);
+  });
+  it("says so when the pass is over, and handles a zero or missing Pc", () => {
+    const x = c();
+    expect(phoneSummary(x, x.tca + 2 * H)).toContain("closest approach was 2.0 hours ago");
+    expect(phoneSummary({ ...x, pc: 0 }, x.tca)).toContain("collision chance 0%");
+    expect(phoneSummary({ ...x, pc: null }, x.tca)).toContain("collision chance not provided");
+  });
+  it("marks a debris object", () => {
+    const x = c();
+    expect(phoneSummary({ ...x, sat2: { ...x.sat2, objectType: "DEBRIS" } }, x.tca)).toContain(`${x.sat2.name ?? x.sat2.designator} (debris)`);
   });
 });

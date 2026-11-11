@@ -55,6 +55,15 @@ export function missComponentsM(cdm: NormalizedCdm): { radial: number; inTrack: 
   return { radial: Math.abs(r), inTrack: Math.abs(t), crossTrack: Math.abs(n) };
 }
 
+/** One sentence an on-console operator can read out on a call: who, when, how likely. */
+export function phoneSummary(cdm: NormalizedCdm, nowMs: number): string {
+  const name = (o: NormalizedCdm["sat1"]) => (o.objectType?.toUpperCase().includes("DEBRIS") ? `${o.name ?? o.designator} (debris)` : (o.name ?? o.designator));
+  const h = (cdm.tca - nowMs) / 3600000;
+  const when = h >= 0 ? `closest approach in ${h.toFixed(1)} hours` : `closest approach was ${(-h).toFixed(1)} hours ago`;
+  const pc = cdm.pc === null ? "collision chance not provided" : cdm.pc === 0 ? "collision chance 0%" : `collision chance ${formatShortOdds(cdm.pc)}`;
+  return `${name(cdm.sat1)} and ${name(cdm.sat2)}: ${when}, ${pc}.`;
+}
+
 export function formatDistance(meters: number): string {
   if (meters < 100) {
     return `${meters.toFixed(0)} m (~${Math.round(meters * 1.09)} yards / half a football field)`;

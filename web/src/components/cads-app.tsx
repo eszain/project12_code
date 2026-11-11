@@ -13,6 +13,7 @@ import {
   type ThemeSelection,
 } from "@/components/animate-ui/buttons/theme-toggler";
 import { EventSummaryCard } from "./event-summary-card";
+import { Button } from "@/components/ui/button";
 import { CdmHistory } from "./cdm-history";
 import { ExplanationCard } from "./explanation-card";
 import { analyzeEvent, type EventAnalysis } from "@/lib/cads/analyze";
@@ -43,6 +44,8 @@ export function CadsApp() {
   const [selected, setSelected] = useState<number | null>(null);
   const [status, setStatus] = useState("The table is empty. Press “1. Load data”.");
   const [busy, setBusy] = useState(false);
+  // Operator view: only the key numbers and a one-line call summary. Specialist view: full detail.
+  const [view, setView] = useState<"operator" | "specialist">("operator");
   // "Now" lives in state (refreshed by every action) because reading the clock during render is not allowed here.
   const [now, setNow] = useState(0);
 
@@ -78,7 +81,7 @@ export function CadsApp() {
       const next: Record<number, EventAnalysis> = {};
       store.getSnapshot().events.forEach((e) => (next[e.id] = analyzeEvent(e, now)));
       setAnalysis(next);
-      return store.getSnapshot().events.length ? "Risk analysis done: severity is shown for every event. Click any event to view its explanation below." : "Nothing to analyse yet. Load data first.";
+      return store.getSnapshot().events.length ? "Risk analysis done: severity is shown for every event. Switch to the Specialist view for the full explanation." : "Nothing to analyse yet. Load data first.";
     });
 
   const reset = () =>
@@ -112,27 +115,39 @@ export function CadsApp() {
         <p aria-live="polite" className="min-h-5 text-sm text-muted-foreground">{status}</p>
 
         <section aria-label="Events" className="space-y-3">
-          <h2 className="text-base font-semibold">Events</h2>
+          <div className="flex flex-wrap items-center gap-3">
+            <h2 className="mr-auto text-base font-semibold">Events</h2>
+            <div role="group" aria-label="View" className="flex gap-1">
+              {(["operator", "specialist"] as const).map((v) => (
+                <Button key={v} variant={view === v ? "default" : "outline"} aria-pressed={view === v} onClick={() => setView(v)}>
+                  {v === "operator" ? "Operator view" : "Specialist view"}
+                </Button>
+              ))}
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {view === "operator" ? "Operator view: the key numbers and a one-line summary for a phone call." : "Specialist view: full detail, history, and explanation."}
+          </p>
           {events.length === 0 ? (
             <p className="rounded-lg border bg-card p-4 text-sm text-muted-foreground">Empty. Press “1. Load data”.</p>
           ) : (
             <ul aria-label="Event list" className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {events.map((e) => (
                 <li key={e.id}>
-                  <EventSummaryCard event={e} analysis={analysis?.[e.id]} now={now} selected={e.id === selected} onSelect={() => setSelected(e.id)} />
+                  <EventSummaryCard event={e} analysis={analysis?.[e.id]} now={now} selected={e.id === selected} view={view} onSelect={() => { setSelected(e.id); setView("specialist"); }} />
                 </li>
               ))}
             </ul>
           )}
         </section>
 
-        {snap.events.length > 0 && selected === null && (
+        {view === "specialist" && snap.events.length > 0 && selected === null && (
           <p className="text-xs text-muted-foreground italic px-1">
             Tip: Press any event card above to open its detailed Explanation below.
           </p>
         )}
 
-        {selectedEvent && (
+        {view === "specialist" && selectedEvent && (
           <>
             <CdmHistory event={selectedEvent} />
             <ExplanationCard event={selectedEvent} analysis={analysis?.[selectedEvent.id]} now={now} />

@@ -2,7 +2,7 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { formatShortOdds, missComponentsM, type EventAnalysis } from "@/lib/cads/analyze";
+import { formatShortOdds, missComponentsM, phoneSummary, type EventAnalysis } from "@/lib/cads/analyze";
 import type { NormalizedCdm, ObjectInfo } from "@/lib/cads/parser";
 import { lastObservations, positionSigmasM, type LastObservation } from "@/lib/cads/quality";
 import { CONFIG, latestRevision, type CdmEvent, type Severity } from "@/lib/cads/store";
@@ -97,12 +97,14 @@ export function EventSummaryCard({
   now,
   selected,
   onSelect,
+  view,
 }: {
   event: CdmEvent;
   analysis?: EventAnalysis;
   now: number;
   selected: boolean;
   onSelect: () => void;
+  view: "operator" | "specialist";
 }) {
   const c = latestRevision(event).cdm;
   const title = `${c.sat1.name ?? c.sat1.designator} / ${c.sat2.name ?? c.sat2.designator}`;
@@ -111,9 +113,15 @@ export function EventSummaryCard({
   return (
     <Card className={selected ? "ring-2 ring-primary" : undefined}>
       <CardHeader className="flex flex-row items-start justify-between gap-2">
-        <button className="text-left text-base font-semibold underline-offset-2 hover:underline focus-visible:underline" onClick={onSelect}>
-          {title}
-        </button>
+        <div className="space-y-1">
+          {view === "specialist" ? (
+            <button className="text-left text-base font-semibold underline-offset-2 hover:underline focus-visible:underline" onClick={onSelect}>
+              {title}
+            </button>
+          ) : (
+            <h3 className="text-base font-semibold">{title}</h3>
+          )}
+        </div>
         {analysis && sev ? (
           <Badge variant={sev.variant} className={sev.className}>
             {analysis.severity}
@@ -132,13 +140,22 @@ export function EventSummaryCard({
             {c.pc === null ? <span className="text-muted-foreground">not provided</span> : formatShortOdds(c.pc)}
           </Metric>
         </dl>
-        <MissSplit cdm={c} />
-        <LastObs cdm={c} now={now} />
-        <div className="space-y-0.5 rounded-md bg-muted/40 p-2">
-          <div className="text-xs text-muted-foreground">Position uncertainty, 1σ (R radial · I in-track · C cross-track)</div>
-          <Uncertainty o={c.sat1} />
-          <Uncertainty o={c.sat2} />
-        </div>
+        {view === "operator" ? (
+          <>
+            <p className="rounded-md bg-muted/40 p-2 text-sm" aria-label="Phone summary">{phoneSummary(c, now)}</p>
+            <button className="text-xs underline underline-offset-2" onClick={onSelect}>Open full details (specialist view)</button>
+          </>
+        ) : (
+          <>
+            <MissSplit cdm={c} />
+            <LastObs cdm={c} now={now} />
+            <div className="space-y-0.5 rounded-md bg-muted/40 p-2">
+              <div className="text-xs text-muted-foreground">Position uncertainty, 1σ (R radial · I in-track · C cross-track)</div>
+              <Uncertainty o={c.sat1} />
+              <Uncertainty o={c.sat2} />
+            </div>
+          </>
+        )}
       </CardContent>
     </Card>
   );
