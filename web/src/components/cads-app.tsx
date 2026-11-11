@@ -2,7 +2,7 @@
 
 import { Monitor, Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { GradientBackground } from "@/components/animate-ui/backgrounds/gradient";
 import { LiquidButton } from "@/components/animate-ui/buttons/liquid";
@@ -12,33 +12,15 @@ import {
   type Resolved,
   type ThemeSelection,
 } from "@/components/animate-ui/buttons/theme-toggler";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { EventSummaryCard } from "./event-summary-card";
+import { Button } from "@/components/ui/button";
+import { CdmHistory } from "./cdm-history";
 import { ExplanationCard } from "./explanation-card";
-import { analyzeEvent, formatShortOdds, type EventAnalysis } from "@/lib/cads/analyze";
-import { loadDemoDocuments } from "@/lib/cads/demo";
-import { CONFIG, Store, latestRevision, type Severity, type Snapshot } from "@/lib/cads/store";
-import { hoursBetween, isoZ } from "@/lib/cads/time";
+import { analyzeEvent, type EventAnalysis } from "@/lib/cads/analyze";
+import { loadDemoDocuments, sortByCreation } from "@/lib/cads/demo";
+import { CONFIG, Store, latestRevision, type Snapshot } from "@/lib/cads/store";
 
 const EMPTY: Snapshot = { events: [], rules: [], alerts: [] };
-const SEVERITY_STYLE: Record<Severity, { variant: "destructive" | "secondary" | "outline"; className?: string }> = {
-  ACTION: { variant: "destructive" },
-  WATCH: { variant: "secondary", className: "bg-amber-500/20 text-amber-700 dark:text-amber-300" },
-  LOW: { variant: "outline" },
-  ZERO: { variant: "outline" },
-  UNKNOWN: { variant: "outline" },
-};
-
-function SeverityBadge({ severity }: { severity: Severity }) {
-  const s = SEVERITY_STYLE[severity];
-  return (
-    <Badge variant={s.variant} className={s.className}>
-      {severity}
-    </Badge>
-  );
-}
-
 function ThemeToggle() {
   const { theme, resolvedTheme, setTheme } = useTheme();
   return (
@@ -55,17 +37,26 @@ function ThemeToggle() {
   );
 }
 
-const fmtHours = (h: number) => (h >= 0 ? `${h.toFixed(1)} h` : `${(-h).toFixed(1)} h ago`);
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-export function CadsApp() {
+export function CadsApp({ stepDelayMs = 900 }: { stepDelayMs?: number } = {}) {
   const [store] = useState(() => new Store());
   const snap = useSyncExternalStore(store.subscribe, store.getSnapshot, () => EMPTY);
   const [analysis, setAnalysis] = useState<Record<number, EventAnalysis> | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
   const [status, setStatus] = useState("The table is empty. Press “1. Load data”.");
   const [busy, setBusy] = useState(false);
+  // Operator view: only the key numbers and a one-line call summary. Specialist view: full detail.
+  const [view, setView] = useState<"operator" | "specialist">("operator");
   // "Now" lives in state (refreshed by every action) because reading the clock during render is not allowed here.
   const [now, setNow] = useState(0);
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
 
   const run = async (fn: () => Promise<string> | string) => {
     setBusy(true);
@@ -83,14 +74,26 @@ export function CadsApp() {
     if (!store.getSnapshot().rules.length) store.addRule({ name: "Pc >= 1e-4 (CSA action level)", pcMin: CONFIG.pcAction, missDistanceMaxM: null, hoursToTcaMax: null, objectIds: [] });
   };
 
+  // D2: feed the CDMs in creation order, one at a time; each is fully stored (and alert rules evaluated) before the next.
   const loadData = () =>
     run(async () => {
       const { docs, shiftHours } = await loadDemoDocuments();
       ensureDefaultRule();
-      const r = store.importDocuments(docs);
       setAnalysis(null);
       setSelected(null);
-      return `Loaded ${r.counts.imported} CDMs (${r.counts.duplicate} repeats ignored); sample dates shifted by ${shiftHours} h so the encounters are upcoming. Now run the risk analysis.`;
+      const ordered = sortByCreation(docs);
+      const total = { imported: 0, duplicate: 0, rejected: 0 };
+      for (let i = 0; i < ordered.length; i++) {
+        if (!alive.current) return "Loading stopped.";
+        setNow(Date.now());
+        setStatus(`Loading CDM ${i + 1} of ${ordered.length}: ${ordered[i].name}`);
+        const r = store.importDocuments([ordered[i]]);
+        total.imported += r.counts.imported;
+        total.duplicate += r.counts.duplicate;
+        total.rejected += r.counts.rejected;
+        if (i < ordered.length - 1) await sleep(stepDelayMs);
+      }
+      return `Loaded ${total.imported} CDMs one at a time, oldest first (${total.duplicate} repeats ignored); sample dates shifted by ${shiftHours} h so the encounters are upcoming. Now run the risk analysis.`;
     });
 
   const runAnalysis = () =>
@@ -99,7 +102,7 @@ export function CadsApp() {
       const next: Record<number, EventAnalysis> = {};
       store.getSnapshot().events.forEach((e) => (next[e.id] = analyzeEvent(e, now)));
       setAnalysis(next);
-      return store.getSnapshot().events.length ? "Risk analysis done: severity is shown for every event. Click any row to view its explanation below." : "Nothing to analyse yet. Load data first.";
+      return store.getSnapshot().events.length ? "Risk analysis done: severity is shown for every event. Switch to the Specialist view for the full explanation." : "Nothing to analyse yet. Load data first.";
     });
 
   const reset = () =>
@@ -132,64 +135,44 @@ export function CadsApp() {
         </p>
         <p aria-live="polite" className="min-h-5 text-sm text-muted-foreground">{status}</p>
 
-        <Card>
-          <CardHeader><CardTitle>Events</CardTitle></CardHeader>
-          <CardContent className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Objects</TableHead><TableHead>TCA (UTC)</TableHead><TableHead>To TCA</TableHead><TableHead>Collision Risk (Pc)</TableHead>
-                  <TableHead>Miss (m)</TableHead><TableHead>CDMs</TableHead><TableHead>Data</TableHead><TableHead>Severity</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {events.length === 0 && (
-                  <TableRow><TableCell colSpan={8} className="text-muted-foreground">Empty. Press “1. Load data”.</TableCell></TableRow>
-                )}
-                {events.map((e) => {
-                  const c = latestRevision(e).cdm;
-                  const a = analysis?.[e.id];
-                  return (
-                    <TableRow key={e.id} data-state={e.id === selected ? "selected" : undefined} className="cursor-pointer" onClick={() => setSelected(e.id)}>
-                      <TableCell>
-                        <button className="text-left font-medium underline-offset-2 hover:underline focus-visible:underline" onClick={() => setSelected(e.id)}>
-                          {c.sat1.name ?? c.sat1.designator} / {c.sat2.name ?? c.sat2.designator}
-                        </button>
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap">{isoZ(c.tca)}</TableCell>
-                      <TableCell className="whitespace-nowrap">{fmtHours(hoursBetween(now, c.tca))}</TableCell>
-                      <TableCell className="whitespace-nowrap">
-                        <div className="text-xs font-medium">
-                          {c.pc === null ? (
-                            <span className="text-muted-foreground">not provided</span>
-                          ) : c.pc === 0 ? (
-                            <span className="font-semibold text-emerald-600 dark:text-emerald-400">0% (0 risk)</span>
-                          ) : (
-                            <span>{formatShortOdds(c.pc)}</span>
-                          )}
-                        </div>
-                        <div className="font-mono text-[11px] text-muted-foreground">{c.pcRaw ?? ""}</div>
-                      </TableCell>
-                      <TableCell>{c.missDistanceM.toFixed(0)}</TableCell>
-                      <TableCell>{e.revisions.length}</TableCell>
-                      <TableCell className="space-x-1">{[...new Set(e.revisions.map((r) => r.sourceLabel))].map((l) => <Badge key={l} variant="outline">{l}</Badge>)}</TableCell>
-                      <TableCell>{a ? <SeverityBadge severity={a.severity} /> : <span className="italic text-muted-foreground">run risk analysis</span>}</TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+        <section aria-label="Events" className="space-y-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <h2 className="mr-auto text-base font-semibold">Events</h2>
+            <div role="group" aria-label="View" className="flex gap-1">
+              {(["operator", "specialist"] as const).map((v) => (
+                <Button key={v} variant={view === v ? "default" : "outline"} aria-pressed={view === v} onClick={() => setView(v)}>
+                  {v === "operator" ? "Operator view" : "Specialist view"}
+                </Button>
+              ))}
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {view === "operator" ? "Operator view: the key numbers and a one-line summary for a phone call." : "Specialist view: full detail, history, and explanation."}
+          </p>
+          {events.length === 0 ? (
+            <p className="rounded-lg border bg-card p-4 text-sm text-muted-foreground">Empty. Press “1. Load data”.</p>
+          ) : (
+            <ul aria-label="Event list" className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {events.map((e) => (
+                <li key={e.id}>
+                  <EventSummaryCard event={e} analysis={analysis?.[e.id]} now={now} selected={e.id === selected} view={view} onSelect={() => { setSelected(e.id); setView("specialist"); }} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
 
-        {snap.events.length > 0 && selected === null && (
+        {view === "specialist" && snap.events.length > 0 && selected === null && (
           <p className="text-xs text-muted-foreground italic px-1">
-            Tip: Press any row in the table above to open its detailed Explanation below.
+            Tip: Press any event card above to open its detailed Explanation below.
           </p>
         )}
 
-        {selectedEvent && (
-          <ExplanationCard event={selectedEvent} analysis={analysis?.[selectedEvent.id]} now={now} />
+        {view === "specialist" && selectedEvent && (
+          <>
+            <CdmHistory event={selectedEvent} />
+            <ExplanationCard event={selectedEvent} analysis={analysis?.[selectedEvent.id]} now={now} />
+          </>
         )}
       </main>
     </>

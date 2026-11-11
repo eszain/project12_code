@@ -1,14 +1,16 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { analyzeEvent, formatDistance, formatOdds, formatShortOdds, formatSpeed } from "./analyze";
+import { analyzeEvent, formatDistance, missComponentsM, phoneSummary, formatOdds, formatShortOdds, formatSpeed } from "./analyze";
 import { groupMessages } from "./correlation";
-import { loadDemoDocuments } from "./demo";
+import { loadDemoDocuments, sortByCreation } from "./demo";
 import { tradeStudy } from "./maneuver";
 import { parseDocument } from "./parser";
 import { recalculate } from "./pc";
+import { lastObservations, positionSigmasM } from "./quality";
 import { CONFIG, Store } from "./store";
 import { hoursBetween } from "./time";
+import { pcAxis, pcChange, pcFraction, trendPoints } from "./trend";
 
 const DATA = join(__dirname, "../../../../data/fixtures");
 const PUBLIC = join(__dirname, "../../../public");
@@ -135,5 +137,137 @@ describe("maneuver trade (AC05)", () => {
     expect(r.candidates[0].missDistanceM).not.toBeCloseTo(r.baseline.missDistanceM, 0);
     expect(r.candidates[0].propellantKg).toBeGreaterThan(0);
     expect(r.assumptions.length && r.limitations.length).toBeTruthy();
+  });
+});
+
+describe("front-line uncertainty (A1)", () => {
+  it("returns 1-sigma radial, in-track, cross-track from the covariance diagonal", () => {
+    const o = cdm("reconstructed", "cdm_set_1.json").sat1;
+    const s = positionSigmasM(o)!;
+    expect(s).toHaveLength(3);
+    s.forEach((v, i) => expect(v).toBeCloseTo(Math.sqrt(o.covarianceRtn![i][i]), 6));
+  });
+  it("returns null when the CDM has no covariance", () => {
+    const o = { ...cdm("reconstructed", "cdm_set_1.json").sat1, covarianceRtn: null };
+    expect(positionSigmasM(o)).toBeNull();
+  });
+});
+
+describe("miss distance by direction (A2)", () => {
+  it("splits the relative position into non-negative radial, in-track, cross-track parts that add up to the miss distance", () => {
+    const c = cdm("reconstructed", "cdm_set_1.json");
+    const m = missComponentsM(c)!;
+    expect(Math.hypot(m.radial, m.inTrack, m.crossTrack)).toBeCloseTo(c.missDistanceM, -1); // within the parser's 1% consistency check
+    expect(Math.min(m.radial, m.inTrack, m.crossTrack)).toBeGreaterThanOrEqual(0);
+  });
+  it("returns null when the CDM has no relative position", () => {
+    expect(missComponentsM({ ...cdm("reconstructed", "cdm_set_1.json"), relPosRtnM: null })).toBeNull();
+  });
+});
+
+describe("last observation (A3)", () => {
+  const base = () => cdm("reconstructed", "cdm_set_1.json");
+  const withObs = (a: number | null, b: number | null) => {
+    const c = base();
+    return { ...c, sat1: { ...c.sat1, lastObEnd: a }, sat2: { ...c.sat2, lastObEnd: b } };
+  };
+  it("reports hours before TCA and before now for each object", () => {
+    const c = base();
+    const now = c.tca + 3 * 3600000;
+    const lo = lastObservations(c, now, 12);
+    expect(lo.sat1!.beforeTcaH).toBeCloseTo((c.tca - c.sat1.lastObEnd!) / 3600000, 6);
+    expect(lo.sat1!.beforeNowH - lo.sat1!.beforeTcaH).toBeCloseTo(3, 6);
+  });
+  it("warns only when the objects were last observed more than the limit apart", () => {
+    const t = base().tca;
+    const H = 3600000;
+    expect(lastObservations(withObs(t - 20 * H, t - 8 * H), t, 12).warn).toBe(false); // exactly 12 h apart: no warning
+    const far = lastObservations(withObs(t - 21 * H, t - 8 * H), t, 12); // 13 h apart
+    expect(far.warn).toBe(true);
+    expect(far.gapH).toBeCloseTo(13, 6);
+  });
+  it("does not warn and reports null when an observation time is missing", () => {
+    const lo = lastObservations(withObs(null, base().tca), base().tca, 12);
+    expect(lo.sat1).toBeNull();
+    expect(lo.gapH).toBeNull();
+    expect(lo.warn).toBe(false);
+  });
+});
+
+describe("CDM history and trend (B1, B2)", () => {
+  const history = () => {
+    const s = new Store();
+    s.importDocuments(readdirSync(join(DATA, "reconstructed")).map((f) => ({ name: f, content: read("reconstructed", f), label: "r" })));
+    return s.getSnapshot().events.find((e) => e.revisions.length === 4)!;
+  };
+  it("lists every CDM of the event oldest first, with the source Pc kept as reported", () => {
+    const pts = trendPoints(history());
+    expect(pts.map((p) => p.n)).toEqual([1, 2, 3, 4]);
+    expect(pts.map((p) => p.createdMs)).toEqual([...pts.map((p) => p.createdMs)].sort((a, b) => a - b));
+    expect(pts.map((p) => p.pc)).toEqual([7.85469e-7, 2.885737e-8, 7.665263e-9, 0]); // Appendix A values, in creation order
+    expect(pts.every((p) => p.hoursToTca > 0)).toBe(true);
+  });
+  it("classifies the change in Pc, including missing values", () => {
+    expect(pcChange(1e-6, 1e-7)).toBe("lower");
+    expect(pcChange(1e-7, 1e-6)).toBe("higher");
+    expect(pcChange(0, 0)).toBe("same");
+    expect(pcChange(null, 1e-7)).toBe("n/a");
+  });
+  it("puts non-zero Pc on a log axis and a source zero on the floor line", () => {
+    const axis = pcAxis(trendPoints(history()))!;
+    expect(axis).toEqual({ floorExp: -10, minExp: -9, maxExp: -6 });
+    expect(pcFraction(0, axis)).toBe(0);
+    expect(pcFraction(null, axis)).toBe(0);
+    expect(pcFraction(1e-6, axis)).toBeCloseTo(1, 9);
+    expect(pcFraction(1e-9, axis)).toBeCloseTo(0.25, 9);
+    expect(pcFraction(1e-6, axis)).toBeGreaterThan(pcFraction(1e-8, axis));
+  });
+  it("has no axis when no CDM has a non-zero Pc", () => {
+    const pts = trendPoints(history()).map((p) => ({ ...p, pc: 0 }));
+    expect(pcAxis(pts)).toBeNull();
+  });
+});
+
+describe("operator phone summary (C1)", () => {
+  const c = () => cdm("reconstructed", "cdm_set_1.json");
+  const H = 3600000;
+  it("names both objects, the time to TCA and the collision chance", () => {
+    const x = c();
+    const text = phoneSummary(x, x.tca - 13 * H);
+    expect(text).toContain("closest approach in 13.0 hours");
+    expect(text).toContain(`collision chance ${formatShortOdds(x.pc)}`);
+    expect(text).toContain(x.sat1.name ?? x.sat1.designator);
+    expect(text).toContain(x.sat2.name ?? x.sat2.designator);
+  });
+  it("says so when the pass is over, and handles a zero or missing Pc", () => {
+    const x = c();
+    expect(phoneSummary(x, x.tca + 2 * H)).toContain("closest approach was 2.0 hours ago");
+    expect(phoneSummary({ ...x, pc: 0 }, x.tca)).toContain("collision chance 0%");
+    expect(phoneSummary({ ...x, pc: null }, x.tca)).toContain("collision chance not provided");
+  });
+  it("marks a debris object", () => {
+    const x = c();
+    expect(phoneSummary({ ...x, sat2: { ...x.sat2, objectType: "DEBRIS" } }, x.tca)).toContain(`${x.sat2.name ?? x.sat2.designator} (debris)`);
+  });
+});
+
+describe("one-at-a-time loading (D2)", () => {
+  const all = () => ["reconstructed", "synthetic"].flatMap((f) => readdirSync(join(DATA, f)).filter((n) => n.endsWith(".json")).map((n) => ({ name: n, content: read(f, n), label: f })));
+  it("orders documents by CDM creation date, oldest first, with unparseable ones last", () => {
+    const junk = { name: "junk.txt", content: "not a cdm", label: "x" };
+    const shuffled = [junk, ...all().reverse()];
+    const out = sortByCreation(shuffled);
+    const times = out.slice(0, -1).map((d) => parseDocument(d.content, d.name)[0].cdm!.creationDate);
+    expect(times).toEqual([...times].sort((a, b) => a - b));
+    expect(out[out.length - 1].name).toBe("junk.txt");
+  });
+  it("importing one document at a time gives the same events as importing them all at once", () => {
+    const one = new Store();
+    sortByCreation(all()).forEach((d) => one.importDocuments([d]));
+    const bulk = new Store();
+    bulk.importDocuments(all());
+    // Compare the grouping (which files form each event, in order); the event key is named after the first CDM to arrive, so it can differ.
+    const shape = (s: Store) => s.getSnapshot().events.map((e) => e.revisions.map((r) => r.sourceFile).join(",")).sort();
+    expect(shape(one)).toEqual(shape(bulk));
   });
 });
