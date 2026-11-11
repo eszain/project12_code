@@ -2,6 +2,7 @@
 // of the math, what it means, and why this severity was chosen for an audience with no technical background.
 // Port of cads/api/routes.py::_explain.
 
+import type { NormalizedCdm } from "./parser";
 import { assessQuality } from "./quality";
 import { recalculate } from "./pc";
 import { CONFIG, CdmEvent, Severity, latestRevision, severityOf } from "./store";
@@ -45,6 +46,13 @@ export function formatShortOdds(pc: number | null | undefined): string {
     return `1 in ${(oneInN / 1000).toFixed(1).replace(/\.0$/, "")}k`;
   }
   return `1 in ${oneInN.toLocaleString()}`;
+}
+
+/** Miss distance split into radial / in-track / cross-track magnitudes in metres, or null if the CDM has no relative position. */
+export function missComponentsM(cdm: NormalizedCdm): { radial: number; inTrack: number; crossTrack: number } | null {
+  if (!cdm.relPosRtnM) return null;
+  const [r, t, n] = cdm.relPosRtnM;
+  return { radial: Math.abs(r), inTrack: Math.abs(t), crossTrack: Math.abs(n) };
 }
 
 export function formatDistance(meters: number): string {

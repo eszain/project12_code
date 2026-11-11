@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { analyzeEvent, formatDistance, formatOdds, formatShortOdds, formatSpeed } from "./analyze";
+import { analyzeEvent, formatDistance, missComponentsM, formatOdds, formatShortOdds, formatSpeed } from "./analyze";
 import { groupMessages } from "./correlation";
 import { loadDemoDocuments } from "./demo";
 import { tradeStudy } from "./maneuver";
@@ -149,5 +149,17 @@ describe("front-line uncertainty (A1)", () => {
   it("returns null when the CDM has no covariance", () => {
     const o = { ...cdm("reconstructed", "cdm_set_1.json").sat1, covarianceRtn: null };
     expect(positionSigmasM(o)).toBeNull();
+  });
+});
+
+describe("miss distance by direction (A2)", () => {
+  it("splits the relative position into non-negative radial, in-track, cross-track parts that add up to the miss distance", () => {
+    const c = cdm("reconstructed", "cdm_set_1.json");
+    const m = missComponentsM(c)!;
+    expect(Math.hypot(m.radial, m.inTrack, m.crossTrack)).toBeCloseTo(c.missDistanceM, -1); // within the parser's 1% consistency check
+    expect(Math.min(m.radial, m.inTrack, m.crossTrack)).toBeGreaterThanOrEqual(0);
+  });
+  it("returns null when the CDM has no relative position", () => {
+    expect(missComponentsM({ ...cdm("reconstructed", "cdm_set_1.json"), relPosRtnM: null })).toBeNull();
   });
 });

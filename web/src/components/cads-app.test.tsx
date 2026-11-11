@@ -28,9 +28,9 @@ it("starts empty, loads data, analyses with reasons, and resets", async () => {
   expect(screen.getAllByText("run risk analysis")).toHaveLength(3); // severity not shown yet
   expect(list().queryByText("ACTION")).toBeNull();
 
-  // A1: every card shows only the front-line numbers
+  // A1 + A2: every card shows only the front-line numbers
   const first = within(list().getAllByRole("listitem")[0]);
-  for (const label of [/Closest approach \(TCA\)/, /Miss distance/, /Collision chance \(Pc\)/, /Position uncertainty, 1σ/]) expect(first.getByText(label)).toBeTruthy();
+  for (const label of [/Closest approach \(TCA\)/, /^Miss distance$/, /Collision chance \(Pc\)/, /Position uncertainty, 1σ/, /Miss distance by direction/]) expect(first.getByText(label)).toBeTruthy();
 
   await user.click(screen.getByRole("button", { name: /Run risk analysis/ }));
   await waitFor(() => expect(list().getAllByText("ACTION")).toHaveLength(1));
