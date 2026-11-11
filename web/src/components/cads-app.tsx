@@ -13,6 +13,7 @@ import {
   type ThemeSelection,
 } from "@/components/animate-ui/buttons/theme-toggler";
 import { EventSummaryCard } from "./event-summary-card";
+import { CdmHistory } from "./cdm-history";
 import { ExplanationCard } from "./explanation-card";
 import { analyzeEvent, type EventAnalysis } from "@/lib/cads/analyze";
 import { loadDemoDocuments } from "@/lib/cads/demo";
@@ -132,7 +133,10 @@ export function CadsApp() {
         )}
 
         {selectedEvent && (
-          <ExplanationCard event={selectedEvent} analysis={analysis?.[selectedEvent.id]} now={now} />
+          <>
+            <CdmHistory event={selectedEvent} />
+            <ExplanationCard event={selectedEvent} analysis={analysis?.[selectedEvent.id]} now={now} />
+          </>
         )}
       </main>
     </>

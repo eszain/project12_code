@@ -10,6 +10,7 @@ import { recalculate } from "./pc";
 import { lastObservations, positionSigmasM } from "./quality";
 import { CONFIG, Store } from "./store";
 import { hoursBetween } from "./time";
+import { pcAxis, pcChange, pcFraction, trendPoints } from "./trend";
 
 const DATA = join(__dirname, "../../../../data/fixtures");
 const PUBLIC = join(__dirname, "../../../public");
@@ -190,5 +191,39 @@ describe("last observation (A3)", () => {
     expect(lo.sat1).toBeNull();
     expect(lo.gapH).toBeNull();
     expect(lo.warn).toBe(false);
+  });
+});
+
+describe("CDM history and trend (B1, B2)", () => {
+  const history = () => {
+    const s = new Store();
+    s.importDocuments(readdirSync(join(DATA, "reconstructed")).map((f) => ({ name: f, content: read("reconstructed", f), label: "r" })));
+    return s.getSnapshot().events.find((e) => e.revisions.length === 4)!;
+  };
+  it("lists every CDM of the event oldest first, with the source Pc kept as reported", () => {
+    const pts = trendPoints(history());
+    expect(pts.map((p) => p.n)).toEqual([1, 2, 3, 4]);
+    expect(pts.map((p) => p.createdMs)).toEqual([...pts.map((p) => p.createdMs)].sort((a, b) => a - b));
+    expect(pts.map((p) => p.pc)).toEqual([7.85469e-7, 2.885737e-8, 7.665263e-9, 0]); // Appendix A values, in creation order
+    expect(pts.every((p) => p.hoursToTca > 0)).toBe(true);
+  });
+  it("classifies the change in Pc, including missing values", () => {
+    expect(pcChange(1e-6, 1e-7)).toBe("lower");
+    expect(pcChange(1e-7, 1e-6)).toBe("higher");
+    expect(pcChange(0, 0)).toBe("same");
+    expect(pcChange(null, 1e-7)).toBe("n/a");
+  });
+  it("puts non-zero Pc on a log axis and a source zero on the floor line", () => {
+    const axis = pcAxis(trendPoints(history()))!;
+    expect(axis).toEqual({ floorExp: -10, minExp: -9, maxExp: -6 });
+    expect(pcFraction(0, axis)).toBe(0);
+    expect(pcFraction(null, axis)).toBe(0);
+    expect(pcFraction(1e-6, axis)).toBeCloseTo(1, 9);
+    expect(pcFraction(1e-9, axis)).toBeCloseTo(0.25, 9);
+    expect(pcFraction(1e-6, axis)).toBeGreaterThan(pcFraction(1e-8, axis));
+  });
+  it("has no axis when no CDM has a non-zero Pc", () => {
+    const pts = trendPoints(history()).map((p) => ({ ...p, pc: 0 }));
+    expect(pcAxis(pts)).toBeNull();
   });
 });

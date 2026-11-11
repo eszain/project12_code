@@ -39,6 +39,11 @@ it("starts empty, loads data, analyses with reasons, and resets", async () => {
   // Pressing an event row displays the Explanation section with LaTeX math work and ELI5 explanation
   await user.click(screen.getAllByRole("button", { name: /CADS TEST SAT/ })[0]);
   expect(await screen.findByText(/Explanation:/)).toBeTruthy();
+  // B1 + B2: history table and both trend charts for the selected event
+  expect(screen.getByText(/CDM history \(\d+ updates?, oldest first\)/)).toBeTruthy();
+  expect(within(screen.getByRole("table", { name: "CDM history" })).getAllByRole("row").length).toBeGreaterThan(2); // header + at least 2 CDMs
+  expect(screen.getByRole("img", { name: /^Pc trend across CDMs/ })).toBeTruthy();
+  expect(screen.getByRole("img", { name: /^Miss distance trend across CDMs/ })).toBeTruthy();
   expect(screen.getByText(/The Math/)).toBeTruthy();
   expect(screen.getByText(/Quick Summary/)).toBeTruthy();
 
