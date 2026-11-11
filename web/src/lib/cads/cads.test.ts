@@ -7,7 +7,7 @@ import { loadDemoDocuments } from "./demo";
 import { tradeStudy } from "./maneuver";
 import { parseDocument } from "./parser";
 import { recalculate } from "./pc";
-import { positionSigmasM } from "./quality";
+import { lastObservations, positionSigmasM } from "./quality";
 import { CONFIG, Store } from "./store";
 import { hoursBetween } from "./time";
 
@@ -161,5 +161,34 @@ describe("miss distance by direction (A2)", () => {
   });
   it("returns null when the CDM has no relative position", () => {
     expect(missComponentsM({ ...cdm("reconstructed", "cdm_set_1.json"), relPosRtnM: null })).toBeNull();
+  });
+});
+
+describe("last observation (A3)", () => {
+  const base = () => cdm("reconstructed", "cdm_set_1.json");
+  const withObs = (a: number | null, b: number | null) => {
+    const c = base();
+    return { ...c, sat1: { ...c.sat1, lastObEnd: a }, sat2: { ...c.sat2, lastObEnd: b } };
+  };
+  it("reports hours before TCA and before now for each object", () => {
+    const c = base();
+    const now = c.tca + 3 * 3600000;
+    const lo = lastObservations(c, now, 12);
+    expect(lo.sat1!.beforeTcaH).toBeCloseTo((c.tca - c.sat1.lastObEnd!) / 3600000, 6);
+    expect(lo.sat1!.beforeNowH - lo.sat1!.beforeTcaH).toBeCloseTo(3, 6);
+  });
+  it("warns only when the objects were last observed more than the limit apart", () => {
+    const t = base().tca;
+    const H = 3600000;
+    expect(lastObservations(withObs(t - 20 * H, t - 8 * H), t, 12).warn).toBe(false); // exactly 12 h apart: no warning
+    const far = lastObservations(withObs(t - 21 * H, t - 8 * H), t, 12); // 13 h apart
+    expect(far.warn).toBe(true);
+    expect(far.gapH).toBeCloseTo(13, 6);
+  });
+  it("does not warn and reports null when an observation time is missing", () => {
+    const lo = lastObservations(withObs(null, base().tca), base().tca, 12);
+    expect(lo.sat1).toBeNull();
+    expect(lo.gapH).toBeNull();
+    expect(lo.warn).toBe(false);
   });
 });

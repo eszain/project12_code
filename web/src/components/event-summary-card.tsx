@@ -4,8 +4,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { formatShortOdds, missComponentsM, type EventAnalysis } from "@/lib/cads/analyze";
 import type { NormalizedCdm, ObjectInfo } from "@/lib/cads/parser";
-import { positionSigmasM } from "@/lib/cads/quality";
-import { latestRevision, type CdmEvent, type Severity } from "@/lib/cads/store";
+import { lastObservations, positionSigmasM, type LastObservation } from "@/lib/cads/quality";
+import { CONFIG, latestRevision, type CdmEvent, type Severity } from "@/lib/cads/store";
 import { hoursBetween, isoZ } from "@/lib/cads/time";
 
 const SEVERITY_STYLE: Record<Severity, { variant: "destructive" | "secondary" | "outline"; className?: string }> = {
@@ -46,6 +46,36 @@ function MissSplit({ cdm }: { cdm: NormalizedCdm }) {
         {part("In-track", m.inTrack)}
         {part("Cross-track", m.crossTrack)}
       </div>
+    </div>
+  );
+}
+
+const fmtH = (h: number) => `${Math.abs(h).toFixed(1)} h`;
+
+function LastObs({ cdm, now }: { cdm: NormalizedCdm; now: number }) {
+  const lo = lastObservations(cdm, now, CONFIG.obsGapWarnH);
+  const row = (o: ObjectInfo, v: LastObservation | null) => (
+    <div className="text-xs">
+      <span className="text-muted-foreground">{o.name ?? o.designator}: </span>
+      {v ? (
+        <span className="font-medium">
+          {fmtH(v.beforeTcaH)} before TCA · {v.beforeNowH >= 0 ? `${fmtH(v.beforeNowH)} ago` : `${fmtH(v.beforeNowH)} from now`}
+        </span>
+      ) : (
+        <span className="text-muted-foreground">not provided</span>
+      )}
+    </div>
+  );
+  return (
+    <div className="space-y-1 rounded-md bg-muted/40 p-2">
+      <div className="text-xs text-muted-foreground">Last observation of each object</div>
+      {row(cdm.sat1, lo.sat1)}
+      {row(cdm.sat2, lo.sat2)}
+      {lo.warn && lo.gapH !== null && (
+        <p role="alert" className="rounded border border-amber-500/50 bg-amber-500/10 px-2 py-1 text-xs font-medium">
+          ⚠ Last observations are {fmtH(lo.gapH)} apart (limit {lo.gapLimitH} h): the object seen earlier may have moved.
+        </p>
+      )}
     </div>
   );
 }
@@ -103,6 +133,7 @@ export function EventSummaryCard({
           </Metric>
         </dl>
         <MissSplit cdm={c} />
+        <LastObs cdm={c} now={now} />
         <div className="space-y-0.5 rounded-md bg-muted/40 p-2">
           <div className="text-xs text-muted-foreground">Position uncertainty, 1σ (R radial · I in-track · C cross-track)</div>
           <Uncertainty o={c.sat1} />

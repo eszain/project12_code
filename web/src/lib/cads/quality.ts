@@ -53,4 +53,18 @@ export function assessQuality(cdm: NormalizedCdm, limits: Limits) {
   };
 }
 
+export interface LastObservation {
+  beforeTcaH: number;
+  beforeNowH: number;
+}
+/** When each object was last observed, relative to TCA and to now, and whether the two are further apart than gapLimitH. */
+export function lastObservations(cdm: NormalizedCdm, nowMs: number, gapLimitH: number) {
+  const one = (o: ObjectInfo): LastObservation | null =>
+    o.lastObEnd === null ? null : { beforeTcaH: (cdm.tca - o.lastObEnd) / 3600000, beforeNowH: (nowMs - o.lastObEnd) / 3600000 };
+  const sat1 = one(cdm.sat1);
+  const sat2 = one(cdm.sat2);
+  const gapH = cdm.sat1.lastObEnd !== null && cdm.sat2.lastObEnd !== null ? Math.abs(cdm.sat1.lastObEnd - cdm.sat2.lastObEnd) / 3600000 : null;
+  return { sat1, sat2, gapH, warn: gapH !== null && gapH > gapLimitH, gapLimitH };
+}
+
 export const objectLabel = (o: ObjectInfo) => (o.name ? `${o.name} (${o.designator})` : o.designator);

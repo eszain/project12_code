@@ -11,6 +11,7 @@ export const CONFIG = {
   pcWatch: 1e-7, // assumption (common NASA CARA practice), to confirm with CSA
   defaultHbrM: 10,
   qualityLimitsM: [200, 1000, 1000] as [number, number, number],
+  obsGapWarnH: 12, // warn when the two objects were last observed more than this far apart (CSA example: 12 h), to confirm with CSA
 };
 
 export type Severity = "ACTION" | "WATCH" | "LOW" | "ZERO" | "UNKNOWN";
