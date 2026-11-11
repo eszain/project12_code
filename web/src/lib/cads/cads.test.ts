@@ -7,6 +7,7 @@ import { loadDemoDocuments } from "./demo";
 import { tradeStudy } from "./maneuver";
 import { parseDocument } from "./parser";
 import { recalculate } from "./pc";
+import { positionSigmasM } from "./quality";
 import { CONFIG, Store } from "./store";
 import { hoursBetween } from "./time";
 
@@ -135,5 +136,18 @@ describe("maneuver trade (AC05)", () => {
     expect(r.candidates[0].missDistanceM).not.toBeCloseTo(r.baseline.missDistanceM, 0);
     expect(r.candidates[0].propellantKg).toBeGreaterThan(0);
     expect(r.assumptions.length && r.limitations.length).toBeTruthy();
+  });
+});
+
+describe("front-line uncertainty (A1)", () => {
+  it("returns 1-sigma radial, in-track, cross-track from the covariance diagonal", () => {
+    const o = cdm("reconstructed", "cdm_set_1.json").sat1;
+    const s = positionSigmasM(o)!;
+    expect(s).toHaveLength(3);
+    s.forEach((v, i) => expect(v).toBeCloseTo(Math.sqrt(o.covarianceRtn![i][i]), 6));
+  });
+  it("returns null when the CDM has no covariance", () => {
+    const o = { ...cdm("reconstructed", "cdm_set_1.json").sat1, covarianceRtn: null };
+    expect(positionSigmasM(o)).toBeNull();
   });
 });

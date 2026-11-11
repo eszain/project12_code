@@ -12,33 +12,13 @@ import {
   type Resolved,
   type ThemeSelection,
 } from "@/components/animate-ui/buttons/theme-toggler";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { EventSummaryCard } from "./event-summary-card";
 import { ExplanationCard } from "./explanation-card";
-import { analyzeEvent, formatShortOdds, type EventAnalysis } from "@/lib/cads/analyze";
+import { analyzeEvent, type EventAnalysis } from "@/lib/cads/analyze";
 import { loadDemoDocuments } from "@/lib/cads/demo";
-import { CONFIG, Store, latestRevision, type Severity, type Snapshot } from "@/lib/cads/store";
-import { hoursBetween, isoZ } from "@/lib/cads/time";
+import { CONFIG, Store, latestRevision, type Snapshot } from "@/lib/cads/store";
 
 const EMPTY: Snapshot = { events: [], rules: [], alerts: [] };
-const SEVERITY_STYLE: Record<Severity, { variant: "destructive" | "secondary" | "outline"; className?: string }> = {
-  ACTION: { variant: "destructive" },
-  WATCH: { variant: "secondary", className: "bg-amber-500/20 text-amber-700 dark:text-amber-300" },
-  LOW: { variant: "outline" },
-  ZERO: { variant: "outline" },
-  UNKNOWN: { variant: "outline" },
-};
-
-function SeverityBadge({ severity }: { severity: Severity }) {
-  const s = SEVERITY_STYLE[severity];
-  return (
-    <Badge variant={s.variant} className={s.className}>
-      {severity}
-    </Badge>
-  );
-}
-
 function ThemeToggle() {
   const { theme, resolvedTheme, setTheme } = useTheme();
   return (
@@ -54,8 +34,6 @@ function ThemeToggle() {
     </ThemeTogglerButton>
   );
 }
-
-const fmtHours = (h: number) => (h >= 0 ? `${h.toFixed(1)} h` : `${(-h).toFixed(1)} h ago`);
 
 export function CadsApp() {
   const [store] = useState(() => new Store());
@@ -99,7 +77,7 @@ export function CadsApp() {
       const next: Record<number, EventAnalysis> = {};
       store.getSnapshot().events.forEach((e) => (next[e.id] = analyzeEvent(e, now)));
       setAnalysis(next);
-      return store.getSnapshot().events.length ? "Risk analysis done: severity is shown for every event. Click any row to view its explanation below." : "Nothing to analyse yet. Load data first.";
+      return store.getSnapshot().events.length ? "Risk analysis done: severity is shown for every event. Click any event to view its explanation below." : "Nothing to analyse yet. Load data first.";
     });
 
   const reset = () =>
@@ -132,59 +110,24 @@ export function CadsApp() {
         </p>
         <p aria-live="polite" className="min-h-5 text-sm text-muted-foreground">{status}</p>
 
-        <Card>
-          <CardHeader><CardTitle>Events</CardTitle></CardHeader>
-          <CardContent className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Objects</TableHead><TableHead>TCA (UTC)</TableHead><TableHead>To TCA</TableHead><TableHead>Collision Risk (Pc)</TableHead>
-                  <TableHead>Miss (m)</TableHead><TableHead>CDMs</TableHead><TableHead>Data</TableHead><TableHead>Severity</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {events.length === 0 && (
-                  <TableRow><TableCell colSpan={8} className="text-muted-foreground">Empty. Press “1. Load data”.</TableCell></TableRow>
-                )}
-                {events.map((e) => {
-                  const c = latestRevision(e).cdm;
-                  const a = analysis?.[e.id];
-                  return (
-                    <TableRow key={e.id} data-state={e.id === selected ? "selected" : undefined} className="cursor-pointer" onClick={() => setSelected(e.id)}>
-                      <TableCell>
-                        <button className="text-left font-medium underline-offset-2 hover:underline focus-visible:underline" onClick={() => setSelected(e.id)}>
-                          {c.sat1.name ?? c.sat1.designator} / {c.sat2.name ?? c.sat2.designator}
-                        </button>
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap">{isoZ(c.tca)}</TableCell>
-                      <TableCell className="whitespace-nowrap">{fmtHours(hoursBetween(now, c.tca))}</TableCell>
-                      <TableCell className="whitespace-nowrap">
-                        <div className="text-xs font-medium">
-                          {c.pc === null ? (
-                            <span className="text-muted-foreground">not provided</span>
-                          ) : c.pc === 0 ? (
-                            <span className="font-semibold text-emerald-600 dark:text-emerald-400">0% (0 risk)</span>
-                          ) : (
-                            <span>{formatShortOdds(c.pc)}</span>
-                          )}
-                        </div>
-                        <div className="font-mono text-[11px] text-muted-foreground">{c.pcRaw ?? ""}</div>
-                      </TableCell>
-                      <TableCell>{c.missDistanceM.toFixed(0)}</TableCell>
-                      <TableCell>{e.revisions.length}</TableCell>
-                      <TableCell className="space-x-1">{[...new Set(e.revisions.map((r) => r.sourceLabel))].map((l) => <Badge key={l} variant="outline">{l}</Badge>)}</TableCell>
-                      <TableCell>{a ? <SeverityBadge severity={a.severity} /> : <span className="italic text-muted-foreground">run risk analysis</span>}</TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+        <section aria-label="Events" className="space-y-3">
+          <h2 className="text-base font-semibold">Events</h2>
+          {events.length === 0 ? (
+            <p className="rounded-lg border bg-card p-4 text-sm text-muted-foreground">Empty. Press “1. Load data”.</p>
+          ) : (
+            <ul aria-label="Event list" className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {events.map((e) => (
+                <li key={e.id}>
+                  <EventSummaryCard event={e} analysis={analysis?.[e.id]} now={now} selected={e.id === selected} onSelect={() => setSelected(e.id)} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
 
         {snap.events.length > 0 && selected === null && (
           <p className="text-xs text-muted-foreground italic px-1">
-            Tip: Press any row in the table above to open its detailed Explanation below.
+            Tip: Press any event card above to open its detailed Explanation below.
           </p>
         )}
 

@@ -23,14 +23,18 @@ it("starts empty, loads data, analyses with reasons, and resets", async () => {
   expect(screen.getByRole("button", { name: /Run risk analysis/ })).toHaveProperty("disabled", true);
 
   await user.click(screen.getByRole("button", { name: /Load data/ }));
-  await waitFor(() => expect(screen.getAllByRole("row").length).toBeGreaterThan(3)); // header + 3 events (+ alerts rows)
+  const list = () => within(screen.getByRole("list", { name: "Event list" }));
+  await waitFor(() => expect(list().getAllByRole("listitem")).toHaveLength(3)); // 3 events
   expect(screen.getAllByText("run risk analysis")).toHaveLength(3); // severity not shown yet
-  const events = () => within(screen.getAllByRole("table")[0]); // Alerts table is separate: its badges are not the analysis
-  expect(events().queryByText("ACTION")).toBeNull();
+  expect(list().queryByText("ACTION")).toBeNull();
+
+  // A1: every card shows only the front-line numbers
+  const first = within(list().getAllByRole("listitem")[0]);
+  for (const label of [/Closest approach \(TCA\)/, /Miss distance/, /Collision chance \(Pc\)/, /Position uncertainty, 1σ/]) expect(first.getByText(label)).toBeTruthy();
 
   await user.click(screen.getByRole("button", { name: /Run risk analysis/ }));
-  await waitFor(() => expect(events().getAllByText("ACTION")).toHaveLength(1));
-  expect(events().getAllByText("ZERO")).toHaveLength(2);
+  await waitFor(() => expect(list().getAllByText("ACTION")).toHaveLength(1));
+  expect(list().getAllByText("ZERO")).toHaveLength(2);
 
   // Pressing an event row displays the Explanation section with LaTeX math work and ELI5 explanation
   await user.click(screen.getAllByRole("button", { name: /CADS TEST SAT/ })[0]);

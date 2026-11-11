@@ -15,13 +15,20 @@ export interface QualityCheck {
   note?: string;
 }
 
+/** 1-sigma position uncertainty [radial, in-track, cross-track] in metres, or null when the CDM has no covariance. */
+export function positionSigmasM(o: ObjectInfo): [number, number, number] | null {
+  if (!o.covarianceRtn) return null;
+  const c = o.covarianceRtn;
+  return [0, 1, 2].map((i) => Math.sqrt(Math.max(c[i][i], 0))) as [number, number, number];
+}
+
 function objectQuality(o: ObjectInfo, cdm: NormalizedCdm, limits: Limits): QualityCheck[] {
   const checks: QualityCheck[] = [];
+  const sigmas = positionSigmasM(o);
   ["radial", "in-track", "cross-track"].forEach((label, i) => {
     const name = `1-sigma ${label} position uncertainty`;
-    if (!o.covarianceRtn) return checks.push({ name, value: null, unit: "m", status: "not provided" });
-    const sigma = Math.sqrt(Math.max(o.covarianceRtn[i][i], 0));
-    checks.push({ name, value: sigma, unit: "m", limit: limits[i], status: sigma <= limits[i] ? "within limit" : "exceeds limit" });
+    if (!sigmas) return checks.push({ name, value: null, unit: "m", status: "not provided" });
+    checks.push({ name, value: sigmas[i], unit: "m", limit: limits[i], status: sigmas[i] <= limits[i] ? "within limit" : "exceeds limit" });
   });
   if (o.actualOdSpanD !== null && o.recommendedOdSpanD) {
     const ratio = o.actualOdSpanD / o.recommendedOdSpanD;
