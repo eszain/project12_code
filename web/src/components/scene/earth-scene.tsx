@@ -2,7 +2,7 @@
 
 import { OrbitControls, Stars } from "@react-three/drei";
 import { Canvas, useFrame, useLoader } from "@react-three/fiber";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import * as THREE from "three";
 
 const EARTH_TEXTURE = "/assets/earth/bluemarble-2048.png";
@@ -10,6 +10,42 @@ const EARTH_NIGHT_TEXTURE = "/assets/earth/earth_lights_2048.png";
 const EARTH_CLOUD_TEXTURE = "/assets/earth/earth_clouds_1024.png";
 const EARTH_NORMAL_TEXTURE = "/assets/earth/earth_normal_2048.jpg";
 const SUN_DIRECTION = new THREE.Vector3(4, 2.5, 5).normalize();
+
+// Day and night textures are tagged as sRGB, so the GPU already returns linear colour when they are
+// sampled; no manual sRGB decode is needed. GLSL preprocessor directives (#include) must each start
+// on their own line, so the shader is written one statement per line.
+const EARTH_FRAGMENT_SHADER = /* glsl */ `
+uniform sampler2D dayMap;
+uniform sampler2D nightMap;
+uniform sampler2D normalMap;
+uniform vec3 sunDirection;
+varying vec2 vUv;
+varying vec3 vWorldNormal;
+varying vec3 vWorldPosition;
+
+void main() {
+  vec3 surfaceNormal = normalize(vWorldNormal);
+  vec3 reference = abs(surfaceNormal.y) > 0.92 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0);
+  vec3 tangent = normalize(cross(reference, surfaceNormal));
+  vec3 bitangent = normalize(cross(surfaceNormal, tangent));
+  vec3 mapNormal = texture2D(normalMap, vUv).xyz * 2.0 - 1.0;
+  surfaceNormal = normalize(surfaceNormal + (tangent * mapNormal.x + bitangent * mapNormal.y) * 0.055);
+  float sun = dot(surfaceNormal, normalize(sunDirection));
+  float dayAmount = smoothstep(-0.16, 0.32, sun);
+  float daylight = 0.5 + max(sun, 0.0) * 0.64;
+  vec3 dayColor = texture2D(dayMap, vUv).rgb;
+  vec3 cityLights = texture2D(nightMap, vUv).rgb;
+  vec3 warmLights = cityLights * vec3(1.9, 1.15, 0.5);
+  vec3 illuminatedDay = dayColor * daylight;
+  vec3 nightBase = dayColor * 0.28;
+  vec3 color = mix(nightBase + warmLights * 0.72, illuminatedDay + warmLights * 0.06, dayAmount);
+  float limb = pow(1.0 - max(dot(surfaceNormal, normalize(cameraPosition - vWorldPosition)), 0.0), 2.2);
+  color += vec3(0.015, 0.055, 0.1) * limb;
+  gl_FragColor = vec4(color, 1.0);
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
+}
+`;
 
 function Atmosphere() {
   return (
@@ -54,13 +90,19 @@ function Earth({ reducedMotion, debug }: { reducedMotion: boolean; debug: EarthD
     sunDirection: { value: SUN_DIRECTION },
   }), [dayTexture, nightTexture, normalTexture]);
 
-  dayTexture.colorSpace = THREE.SRGBColorSpace;
-  nightTexture.colorSpace = THREE.SRGBColorSpace;
-  cloudTexture.colorSpace = THREE.NoColorSpace;
-  normalTexture.colorSpace = THREE.NoColorSpace;
-  dayTexture.anisotropy = 4;
-  nightTexture.anisotropy = 4;
-  normalTexture.anisotropy = 4;
+  useLayoutEffect(() => {
+    const settings: [THREE.Texture, THREE.ColorSpace, number][] = [
+      [dayTexture, THREE.SRGBColorSpace, 4],
+      [nightTexture, THREE.SRGBColorSpace, 4],
+      [cloudTexture, THREE.NoColorSpace, 1],
+      [normalTexture, THREE.NoColorSpace, 4],
+    ];
+    for (const [texture, colorSpace, anisotropy] of settings) {
+      texture.colorSpace = colorSpace;
+      texture.anisotropy = anisotropy;
+      texture.needsUpdate = true;
+    }
+  }, [dayTexture, nightTexture, cloudTexture, normalTexture]);
 
   useFrame((_, delta) => {
     if (group.current && !reducedMotion) group.current.rotation.y += delta * 0.055;
@@ -74,7 +116,7 @@ function Earth({ reducedMotion, debug }: { reducedMotion: boolean; debug: EarthD
           <shaderMaterial
             uniforms={uniforms}
             vertexShader={`varying vec2 vUv; varying vec3 vWorldNormal; varying vec3 vWorldPosition; void main() { vUv = uv; vWorldNormal = normalize(mat3(modelMatrix) * normal); vWorldPosition = (modelMatrix * vec4(position, 1.0)).xyz; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`}
-            fragmentShader={`uniform sampler2D dayMap; uniform sampler2D nightMap; uniform sampler2D normalMap; uniform vec3 sunDirection; varying vec2 vUv; varying vec3 vWorldNormal; varying vec3 vWorldPosition; void main() { vec3 surfaceNormal = normalize(vWorldNormal); vec3 reference = abs(surfaceNormal.y) > 0.92 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0); vec3 tangent = normalize(cross(reference, surfaceNormal)); vec3 bitangent = normalize(cross(surfaceNormal, tangent)); vec3 mapNormal = texture2D(normalMap, vUv).xyz * 2.0 - 1.0; surfaceNormal = normalize(surfaceNormal + (tangent * mapNormal.x + bitangent * mapNormal.y) * 0.055); float sun = dot(surfaceNormal, normalize(sunDirection)); float dayAmount = smoothstep(-0.16, 0.32, sun); float daylight = 0.5 + max(sun, 0.0) * 0.64; vec3 dayColor = sRGBTransferEOTF(texture2D(dayMap, vUv).rgb); vec3 cityLights = sRGBTransferEOTF(texture2D(nightMap, vUv).rgb); vec3 warmLights = cityLights * vec3(1.9, 1.15, 0.5); vec3 illuminatedDay = dayColor * daylight; vec3 nightBase = dayColor * 0.28; vec3 color = mix(nightBase + warmLights * 0.72, illuminatedDay + warmLights * 0.06, dayAmount); float limb = pow(1.0 - max(dot(surfaceNormal, normalize(cameraPosition - vWorldPosition)), 0.0), 2.2); color += vec3(0.015, 0.055, 0.1) * limb; gl_FragColor = vec4(color, 1.0); #include <tonemapping_fragment> #include <colorspace_fragment> }`}
+            fragmentShader={EARTH_FRAGMENT_SHADER}
           />
         ) : (
           <meshBasicMaterial map={debug === "night" ? nightTexture : dayTexture} toneMapped={false} />
@@ -143,21 +185,28 @@ function ConjunctionMarker({ reducedMotion }: { reducedMotion: boolean }) {
   );
 }
 
+function detectWebgl() {
+  const canvas = document.createElement("canvas");
+  return Boolean(canvas.getContext("webgl") || canvas.getContext("experimental-webgl"));
+}
+
+function readDebugMode(): EarthDebugMode {
+  const requested = new URLSearchParams(window.location.search).get("earthDebug");
+  return requested === "day" || requested === "night" || requested === "cloud" ? requested : "shader";
+}
+
+const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
+const prefersReducedMotion = () => window.matchMedia(REDUCED_MOTION).matches;
+function subscribeReducedMotion(onChange: () => void) {
+  const query = window.matchMedia(REDUCED_MOTION);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+
 export function EarthScene() {
-  const [webgl, setWebgl] = useState(true);
-  const [reducedMotion, setReducedMotion] = useState(false);
-  const [earthDebug, setEarthDebug] = useState<EarthDebugMode>("shader");
-  useEffect(() => {
-    const canvas = document.createElement("canvas");
-    setWebgl(Boolean(canvas.getContext("webgl") || canvas.getContext("experimental-webgl")));
-    const query = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const requestedDebug = new URLSearchParams(window.location.search).get("earthDebug");
-    if (requestedDebug === "day" || requestedDebug === "night" || requestedDebug === "cloud" || requestedDebug === "shader") setEarthDebug(requestedDebug);
-    const update = () => setReducedMotion(query.matches);
-    update();
-    query.addEventListener("change", update);
-    return () => query.removeEventListener("change", update);
-  }, []);
+  const [webgl] = useState(detectWebgl);
+  const [earthDebug] = useState(readDebugMode);
+  const reducedMotion = useSyncExternalStore(subscribeReducedMotion, prefersReducedMotion, () => false);
   if (!webgl) return <div className="scene-fallback" role="img" aria-label="Orbital visualization unavailable"><span className="fallback-orbit" /><span>Orbital visualization unavailable</span></div>;
   return (
     <Canvas camera={{ position: [0, 0, 5], fov: 48 }} dpr={[1, 1.35]} gl={{ antialias: true, alpha: true }} onCreated={({ gl }) => { gl.toneMapping = THREE.ACESFilmicToneMapping; gl.toneMappingExposure = 1.15; }}>
