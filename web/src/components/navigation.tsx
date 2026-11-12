@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 const links = [
-  ["Overview", "/"], ["Events", "/events"], ["Analysis", "/analysis"], ["Alerts", "/alerts"], ["About", "#about"],
+  ["Overview", "/"], ["Vision", "/vision"], ["Events", "/events"], ["Analysis", "/analysis"], ["Alerts", "/alerts"], ["About", "#about"],
 ];
 
 export function Navigation({ landing = false }: { landing?: boolean }) {

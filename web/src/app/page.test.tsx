@@ -18,7 +18,7 @@ it("landing page shows the headline, the 3D scene slot, and links to the dashboa
   expect(screen.getByTestId("earth")).toBeTruthy();
   expect(screen.getByRole("link", { name: /Open Dashboard/ }).getAttribute("href")).toBe("/dashboard");
   const nav = within(screen.getByRole("navigation", { name: "Primary navigation" }));
-  for (const [label, href] of [["Events", "/events"], ["Analysis", "/analysis"], ["Alerts", "/alerts"]]) {
+  for (const [label, href] of [["Vision", "/vision"], ["Events", "/events"], ["Analysis", "/analysis"], ["Alerts", "/alerts"]]) {
     expect(nav.getByRole("link", { name: label }).getAttribute("href")).toBe(href);
   }
   expect(nav.getByRole("link", { name: /Operator Console/ }).getAttribute("href")).toBe("/dashboard");
