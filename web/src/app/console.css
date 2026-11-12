@@ -1,0 +1,20 @@
+/* Dashboard additions on top of site.css: the parts of the CDM app that have no site.css equivalent.
+   Colours and spacing reuse the site.css variables (--cyan, --line, --muted). */
+
+/* Action row: load, analyse, reset, and the status line */
+.console-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 22px; }
+.console-actions .button { border: 1px solid transparent; cursor: pointer; font-family: inherit; }
+.console-actions .button-secondary { border-color: rgba(110, 224, 255, .35); }
+.button:disabled { box-shadow: none; cursor: not-allowed; opacity: .45; transform: none; }
+.console-status { color: #b6cddd; flex: 1 1 260px; font-size: .74rem; line-height: 1.5; margin: 0; min-height: 1.2em; }
+
+/* Operator / Specialist switch */
+.view-switch { border: 1px solid var(--line); border-radius: 999px; display: inline-flex; padding: 3px; }
+.view-option { background: transparent; border: 0; border-radius: 999px; color: #a9bbce; cursor: pointer; font: inherit; font-size: .66rem; letter-spacing: .1em; padding: 9px 14px; text-transform: uppercase; }
+.view-option:hover { color: white; }
+.view-option[aria-pressed="true"] { background: var(--cyan); color: #04101c; font-weight: 700; }
+.panel-note { color: var(--site-muted); font-size: .72rem; line-height: 1.5; margin: -8px 0 18px; }
+
+@media (max-width: 820px) {
+  .events-panel .panel-heading { align-items: start; flex-direction: column; gap: 14px; }
+}
