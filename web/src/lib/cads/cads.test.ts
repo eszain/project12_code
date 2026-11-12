@@ -3,13 +3,16 @@ import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { analyzeEvent, formatDistance, missComponentsM, phoneSummary, formatOdds, formatShortOdds, formatSpeed } from "./analyze";
 import { groupMessages } from "./correlation";
-import { loadDemoDocuments, sortByCreation } from "./demo";
+import { SCALE_NOTE, generateScaleDocs, loadDemoDocuments, sortByCreation } from "./demo";
 import { tradeStudy } from "./maneuver";
 import { parseDocument } from "./parser";
 import { recalculate } from "./pc";
+import { CONFIDENCE_LIMITS, calculationDetails, confidenceOf, encounterPicture, missVsUncertainty } from "./details";
 import { lastObservations, positionSigmasM } from "./quality";
-import { CONFIG, Store } from "./store";
+import { DEFAULT_FILTERS, filterAndSort, isArchived, paginate, statusCounts } from "./register";
+import { CONFIG, Store, severityOf } from "./store";
 import { hoursBetween } from "./time";
+import { actionLabel, needsAttention, severityBands } from "./severity";
 import { pcAxis, pcChange, pcFraction, trendPoints } from "./trend";
 
 const DATA = join(__dirname, "../../../../data/fixtures");
@@ -124,6 +127,9 @@ describe("store, alerts and analysis (AC03)", () => {
     expect(formatOdds(1e-6)).toBe("1 in 1 million (less than 0.001%)");
     expect(formatShortOdds(3.888786e-4)).toBe("1 in 2,571");
     expect(formatShortOdds(0)).toBe("0%");
+    expect(formatShortOdds(7.665263e-9)).toBe("1 in 130.5M"); // below a billion: unchanged
+    expect(formatShortOdds(6.12e-12)).toBe("< 1 in 1B"); // very small values stay short enough for a card
+    expect(formatOdds(6.12e-12)).toBe("less than 1 in 1 billion (practically zero)");
     expect(formatDistance(62)).toContain("football field");
     expect(formatSpeed(12793)).toContain("Mach");
   });
@@ -269,5 +275,187 @@ describe("one-at-a-time loading (D2)", () => {
     // Compare the grouping (which files form each event, in order); the event key is named after the first CDM to arrive, so it can differ.
     const shape = (s: Store) => s.getSnapshot().events.map((e) => e.revisions.map((r) => r.sourceFile).join(",")).sort();
     expect(shape(one)).toEqual(shape(bulk));
+  });
+});
+
+describe("severity bands and action labels (G7, G8)", () => {
+  it("has one band per severity, in the order ACTION, WATCH, LOW, ZERO, UNKNOWN", () => {
+    expect(severityBands().map((b) => b.severity)).toEqual(["ACTION", "WATCH", "LOW", "ZERO", "UNKNOWN"]);
+  });
+  it("states the limits from CONFIG in plain words, so the legend cannot drift from the rating", () => {
+    const [action, watch] = severityBands();
+    expect(action.range).toBe("Pc of 1 in 10,000 or higher");
+    expect(watch.range).toBe("Pc from 1 in 10,000,000 up to 1 in 10,000");
+  });
+  it("gives every severity an action label, and only ACTION asks for a maneuver", () => {
+    expect(actionLabel("ACTION")).toMatch(/maneuver/i);
+    for (const s of ["WATCH", "LOW", "ZERO", "UNKNOWN"] as const) expect(actionLabel(s)).not.toMatch(/maneuver/i);
+  });
+  it("marks ACTION, WATCH and UNKNOWN as needing attention", () => {
+    expect(["ACTION", "WATCH", "LOW", "ZERO", "UNKNOWN"].filter((s) => needsAttention(s as never))).toEqual(["ACTION", "WATCH", "UNKNOWN"]);
+  });
+});
+
+describe("miss distance against uncertainty and the calculation details (A4, A5, E1)", () => {
+  const syn = (n: number) => parseDocument(readFileSync(join(PUBLIC, "fixtures/synthetic", `synthetic_high_risk_${n}.json`), "utf8"), "s")[0].cdm!;
+  it("turns the ratio into high, moderate or low confidence at the stated limits", () => {
+    expect(confidenceOf(CONFIDENCE_LIMITS.high)).toBe("high");
+    expect(confidenceOf(CONFIDENCE_LIMITS.high - 0.01)).toBe("moderate");
+    expect(confidenceOf(CONFIDENCE_LIMITS.low)).toBe("moderate");
+    expect(confidenceOf(CONFIDENCE_LIMITS.low - 0.01)).toBe("low");
+  });
+  it("rates a miss far larger than the uncertainty as high confidence, and one smaller than it as low", () => {
+    const clear = missVsUncertainty(cdm("reconstructed", "cdm_set_6.json"));
+    const close = missVsUncertainty(syn(3));
+    if (!clear.available || !close.available) throw new Error("expected both to be available");
+    expect(clear.confidence).toBe("high"); // 183 m miss, about 15 m uncertainty
+    expect(clear.ratio).toBeGreaterThan(10);
+    expect(close.confidence).toBe("low"); // 62 m miss, about 118 m uncertainty
+    expect(close.ratio).toBeLessThan(1);
+    expect(close.sentence).toMatch(/low confidence/i);
+  });
+  it("is unavailable, with a reason, when the CDM has no covariance", () => {
+    const c = cdm("reconstructed", "cdm_set_1.json");
+    const r = missVsUncertainty({ ...c, sat1: { ...c.sat1, covarianceRtn: null } });
+    expect(r.available).toBe(false);
+  });
+  it("reproduces the source Pc within 1% for the synthetic CDMs (CARA-style 2D method)", () => {
+    for (const n of [1, 2, 3]) {
+      const c = syn(n);
+      const rec = calculationDetails(c).recalculation;
+      if (!rec.available) throw new Error(rec.reason);
+      expect(Math.abs(rec.recalculatedPc / c.pc! - 1)).toBeLessThan(0.01);
+    }
+  });
+  it("lists both objects with RSS uncertainty and keeps the source values untouched", () => {
+    const c = syn(3);
+    const d = calculationDetails(c);
+    expect(d.objects).toHaveLength(2);
+    expect(d.objects[0].rssM).toBeCloseTo(Math.hypot(d.objects[0].radialM, d.objects[0].inTrackM, d.objects[0].crossTrackM), 9);
+    expect(d.source.pcRaw).toBe(c.pcRaw);
+    expect(d.source.missM).toBe(c.missDistanceM);
+  });
+});
+
+describe("conjunction picture geometry (G4)", () => {
+  const syn3 = () => parseDocument(readFileSync(join(PUBLIC, "fixtures/synthetic/synthetic_high_risk_3.json"), "utf8"), "s")[0].cdm!;
+  it("places the secondary at the in-plane miss, with 1, 2 and 3 sigma ellipses growing in that order", () => {
+    const p = encounterPicture(syn3());
+    if (!p.available) throw new Error(p.reason);
+    expect(Math.hypot(p.missX, p.missZ)).toBeCloseTo(62, 0);
+    expect(p.ellipses.map((e) => e.k)).toEqual([1, 2, 3]);
+    expect(p.ellipses[1].majorM).toBeCloseTo(2 * p.ellipses[0].majorM, 9);
+    expect(p.ellipses[2].majorM).toBeCloseTo(3 * p.ellipses[0].majorM, 9);
+    expect(p.ellipses.every((e) => e.majorM >= e.minorM)).toBe(true);
+  });
+  it("fits the miss point, the 3 sigma ellipse and the objects inside the view", () => {
+    const p = encounterPicture(syn3());
+    if (!p.available) throw new Error(p.reason);
+    expect(p.extentM).toBeGreaterThan(Math.hypot(p.missX, p.missZ) + p.ellipses[2].majorM);
+    expect(p.extentM).toBeGreaterThan(p.hbrM * 4);
+  });
+  it("is unavailable, with a reason, when the CDM has no covariance", () => {
+    const c = syn3();
+    expect(encounterPicture({ ...c, sat2: { ...c.sat2, covarianceRtn: null } }).available).toBe(false);
+  });
+});
+
+describe("register: archive, filters, sort and paging (D1, G5, G6)", () => {
+  const H = 3600000;
+  const loaded = () => {
+    const s = new Store();
+    s.importDocuments(["reconstructed", "synthetic"].flatMap((f) => readdirSync(join(DATA, f)).filter((n) => n.endsWith(".json")).map((n) => ({ name: n, content: read(f, n), label: f }))));
+    return s.getSnapshot().events; // 3 events: two SCISAT passes and the CADS TEST event
+  };
+  const tcaOf = (e: ReturnType<typeof loaded>[number]) => e.revisions[e.revisions.length - 1].cdm.tca;
+  it("archives an event once its closest approach has passed, unless the user chose otherwise", () => {
+    const [first] = loaded();
+    expect(isArchived(first, tcaOf(first) - H)).toBe(false);
+    expect(isArchived(first, tcaOf(first) + H)).toBe(true);
+    expect(isArchived(first, tcaOf(first) - H, { [first.id]: true })).toBe(true); // archived by hand
+    expect(isArchived(first, tcaOf(first) + H, { [first.id]: false })).toBe(false); // kept active by hand
+  });
+  it("splits events into Active and Archived and counts them", () => {
+    const events = loaded();
+    const mid = tcaOf(events[0]) + H; // after the first SCISAT pass only
+    const c = statusCounts(events, mid);
+    expect(c.archived).toBeGreaterThanOrEqual(1);
+    expect(c.active + c.archived).toBe(events.length);
+    const active = filterAndSort(events, { ...DEFAULT_FILTERS, status: "active" }, false, mid);
+    const archived = filterAndSort(events, { ...DEFAULT_FILTERS, status: "archived" }, false, mid);
+    expect(active.length).toBe(c.active);
+    expect(archived.length).toBe(c.archived);
+    expect(active.some((e) => archived.includes(e))).toBe(false);
+  });
+  it("searches by object name or number, ignoring case", () => {
+    const events = loaded();
+    const now = Math.min(...events.map(tcaOf)) - H;
+    expect(filterAndSort(events, { ...DEFAULT_FILTERS, query: "scisat" }, false, now)).toHaveLength(events.filter((e) => e.revisions[0].cdm.sat1.name === "SCISAT 1").length);
+    expect(filterAndSort(events, { ...DEFAULT_FILTERS, query: "99901" }, false, now)).toHaveLength(1);
+    expect(filterAndSort(events, { ...DEFAULT_FILTERS, query: "no such object" }, false, now)).toHaveLength(0);
+  });
+  it("applies the severity and needs-attention filters only after the risk analysis", () => {
+    const events = loaded();
+    const now = Math.min(...events.map(tcaOf)) - H;
+    const action = { ...DEFAULT_FILTERS, severity: "ACTION" as const };
+    expect(filterAndSort(events, action, false, now)).toHaveLength(events.length); // not analysed: ignored
+    expect(filterAndSort(events, action, true, now)).toHaveLength(1); // only the CADS TEST event is above 1e-4
+    expect(filterAndSort(events, { ...DEFAULT_FILTERS, attentionOnly: true }, true, now)).toHaveLength(1); // the two SCISAT events are ZERO
+  });
+  it("sorts by closest approach, or by highest Pc once analysed", () => {
+    const events = loaded();
+    const now = Math.min(...events.map(tcaOf)) - H;
+    const byTca = filterAndSort(events, DEFAULT_FILTERS, true, now).map(tcaOf);
+    expect(byTca).toEqual([...byTca].sort((a, b) => a - b));
+    const byRisk = filterAndSort(events, { ...DEFAULT_FILTERS, sort: "risk" }, true, now);
+    expect(byRisk[0].revisions[0].cdm.sat1.designator).toBe("99901"); // Pc 3.9e-4 beats the two zeros
+  });
+  it("pages a long list and keeps the page number in range", () => {
+    const items = Array.from({ length: 14 }, (_, i) => i);
+    expect(paginate(items, 1).items).toEqual([0, 1, 2, 3, 4, 5]);
+    expect(paginate(items, 3).items).toEqual([12, 13]);
+    expect(paginate(items, 3).pages).toBe(3);
+    expect(paginate(items, 99).page).toBe(3); // clamped
+    expect(paginate(items, -4).page).toBe(1);
+    expect(paginate([], 1)).toMatchObject({ pages: 1, total: 0, items: [] });
+  });
+});
+
+describe("generated test events (G5)", () => {
+  const templates = () => [1, 2, 3].map((n) => JSON.parse(readFileSync(join(PUBLIC, "fixtures/synthetic", `synthetic_high_risk_${n}.json`), "utf8")) as Record<string, string>);
+  const NOW = Date.UTC(2026, 10, 12, 12, 0, 0);
+  it("makes three CDMs per event, all valid, with unique message IDs and new object numbers", () => {
+    const docs = generateScaleDocs(templates(), 20, NOW);
+    expect(docs).toHaveLength(60);
+    const parsed = docs.map((d) => parseDocument(d.content, d.name)[0]);
+    expect(parsed.every((p) => p.cdm && p.errors.length === 0)).toBe(true);
+    expect(new Set(parsed.map((p) => p.cdm!.messageKey)).size).toBe(60);
+    expect(new Set(parsed.map((p) => p.cdm!.sat1.designator)).size).toBe(20);
+  });
+  it("groups into exactly the requested number of events, oldest CDM first", () => {
+    const s = new Store();
+    s.importDocuments(sortByCreation(generateScaleDocs(templates(), 25, NOW)));
+    expect(s.getSnapshot().events).toHaveLength(25);
+    expect(s.getSnapshot().events.every((e) => e.revisions.length === 3)).toBe(true);
+  });
+  it("is repeatable, and a second batch never repeats an ID", () => {
+    expect(generateScaleDocs(templates(), 5, NOW)).toEqual(generateScaleDocs(templates(), 5, NOW));
+    const s = new Store();
+    s.importDocuments(generateScaleDocs(templates(), 10, NOW, 0));
+    s.importDocuments(generateScaleDocs(templates(), 10, NOW, 10));
+    expect(s.getSnapshot().events).toHaveLength(20);
+  });
+  it("spreads closest approaches around now and covers every severity band", () => {
+    const s = new Store();
+    s.importDocuments(generateScaleDocs(templates(), 120, NOW));
+    const evs = s.getSnapshot().events;
+    const tcas = evs.map((e) => e.revisions[2].cdm.tca);
+    expect(tcas.some((t) => t < NOW)).toBe(true); // some already passed, so they are archived
+    expect(tcas.some((t) => t > NOW + 48 * 3600000)).toBe(true);
+    const sevs = new Set(evs.map((e) => severityOf(e.revisions[2].cdm.pc)));
+    for (const band of ["ACTION", "WATCH", "LOW", "ZERO"] as const) expect(sevs.has(band)).toBe(true);
+  });
+  it("marks every generated CDM as a test event", () => {
+    for (const d of generateScaleDocs(templates(), 3, NOW)) expect(JSON.parse(d.content)._FIXTURE_NOTE).toBe(SCALE_NOTE);
   });
 });

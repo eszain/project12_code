@@ -1,19 +1,10 @@
 "use client";
 
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Latex } from "@/components/latex";
 import { formatDistance, formatOdds, formatSpeed, type EventAnalysis } from "@/lib/cads/analyze";
-import { CONFIG, latestRevision, type CdmEvent, type Severity } from "@/lib/cads/store";
+import { latestRevision, type CdmEvent } from "@/lib/cads/store";
+import { SeverityBadge } from "./severity-badge";
 import { hoursBetween } from "@/lib/cads/time";
-
-const SEVERITY_STYLE: Record<Severity, { variant: "destructive" | "secondary" | "outline"; className?: string }> = {
-  ACTION: { variant: "destructive" },
-  WATCH: { variant: "secondary", className: "bg-amber-500/20 text-amber-700 dark:text-amber-300" },
-  LOW: { variant: "outline" },
-  ZERO: { variant: "outline" },
-  UNKNOWN: { variant: "outline" },
-};
 
 export function ExplanationCard({
   event,
@@ -37,29 +28,21 @@ export function ExplanationCard({
   const pctStr = pc && pc > 0 ? (pc * 100 < 0.01 ? (pc * 100).toFixed(3) : (pc * 100).toFixed(2)) + "%" : "0%";
 
   return (
-    <Card className="border-primary/20 shadow-sm">
-      <CardHeader className="border-b bg-muted/30 pb-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <CardTitle className="text-base sm:text-lg">
-              Explanation: {sat1Label} / {sat2Label}
-            </CardTitle>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Encounter {event.key} | Closest pass {timingText} | {event.revisions.length} radar update{event.revisions.length > 1 ? "s" : ""}
-            </p>
-          </div>
-          {analysis && (
-            <Badge
-              variant={SEVERITY_STYLE[analysis.severity].variant}
-              className={`px-3 py-1 text-sm font-semibold ${SEVERITY_STYLE[analysis.severity].className ?? ""}`}
-            >
-              {analysis.severity}
-            </Badge>
-          )}
+    <section className="detail-panel ops-panel ops-explain" aria-labelledby="explanation-heading">
+      <div className="panel-heading">
+        <div>
+          <p className="eyebrow">PLAIN-LANGUAGE EXPLANATION</p>
+          <h2 id="explanation-heading">
+            Explanation: {sat1Label} / {sat2Label}
+          </h2>
+          <p className="panel-note ops-explain-meta">
+            Encounter {event.key} | Closest pass {timingText} | {event.revisions.length} radar update{event.revisions.length > 1 ? "s" : ""}
+          </p>
         </div>
-      </CardHeader>
+        {analysis && <SeverityBadge severity={analysis.severity} />}
+      </div>
 
-      <CardContent className="space-y-4 pt-4">
+      <div className="space-y-4">
         {!analysis ? (
           <p className="text-xs text-muted-foreground italic">
             Press &ldquo;2. Run risk analysis&rdquo; above to calculate collision probability and show the explanation.
@@ -145,7 +128,7 @@ export function ExplanationCard({
                 <div className="rounded border bg-muted/40 p-2.5 space-y-1">
                   <div className="text-[11px] text-muted-foreground font-medium">3. Safety Limit</div>
                   <div className="text-sm font-semibold text-foreground py-0.5">
-                    <Latex math="P_{\\text{limit}} = \\frac{1}{10{,}000}" />
+                    <Latex math="P_{\text{limit}} = \frac{1}{10{,}000}" />
                   </div>
                   <p className="text-[11px] text-muted-foreground">Action threshold (0.01%)</p>
                 </div>
@@ -206,7 +189,7 @@ export function ExplanationCard({
             </div>
           </>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   );
 }
