@@ -6,6 +6,7 @@ import { Navigation } from "@/components/navigation";
 import { EventSummaryCard } from "./event-summary-card";
 import { CdmHistory } from "./cdm-history";
 import { ExplanationCard } from "./explanation-card";
+import { SeverityLegend } from "./severity-legend";
 import { analyzeEvent, type EventAnalysis } from "@/lib/cads/analyze";
 import { loadDemoDocuments, sortByCreation } from "@/lib/cads/demo";
 import { CONFIG, Store, latestRevision, type Snapshot } from "@/lib/cads/store";
@@ -147,6 +148,8 @@ export function CadsApp({ stepDelayMs = 900 }: { stepDelayMs?: number } = {}) {
           <SummaryCard label="CDMs loaded" value={pad2(cdmCount)} detail="Loaded one at a time, oldest first" icon="↻" tone="purple" />
           <SummaryCard label="Next closest approach" value={nextTcaH === null ? "–" : `${nextTcaH.toFixed(1)} h`} detail={nextTcaH === null ? "No upcoming encounters" : "Soonest upcoming TCA"} icon="◷" tone="green" />
         </section>
+
+        <SeverityLegend />
 
         <section aria-label="Events" className="events-panel">
           <div className="panel-heading">

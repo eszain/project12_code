@@ -88,3 +88,14 @@ h3.ops-title { cursor: default; }
 
 /* Version tag, shown on every page in the top navigation bar */
 .version-tag { border: 1px solid rgba(110, 224, 255, .4); border-radius: 999px; color: var(--cyan); font-size: .6rem; font-weight: 700; letter-spacing: .12em; margin-left: 10px; padding: 3px 8px; white-space: nowrap; }
+
+/* Action label on operator cards and the severity legend */
+.ops-action { border-radius: 6px; font-size: .72rem; font-weight: 700; letter-spacing: .04em; margin: 0; padding: 7px 10px; }
+.ops-action-action { background: rgba(255, 98, 76, .14); border: 1px solid rgba(255, 121, 84, .55); color: #ffb3a1; }
+.ops-action-watch { background: rgba(255, 190, 104, .1); border: 1px solid rgba(255, 190, 104, .4); color: #ffd59b; }
+.ops-action-low, .ops-action-zero { background: rgba(89, 216, 176, .08); border: 1px solid rgba(89, 216, 176, .3); color: #a9eed9; }
+.ops-action-unknown { background: rgba(155, 203, 229, .08); border: 1px solid rgba(155, 203, 229, .3); color: #c9e8f5; }
+.legend-panel { background: rgba(5, 15, 27, .55); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 20px; padding: 14px 18px; }
+.legend-panel summary { color: var(--cyan); cursor: pointer; font-size: .72rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.legend-panel .panel-note { margin: 12px 0; }
+.legend-table { min-width: 0; table-layout: auto; }

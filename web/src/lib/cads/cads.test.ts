@@ -10,6 +10,7 @@ import { recalculate } from "./pc";
 import { lastObservations, positionSigmasM } from "./quality";
 import { CONFIG, Store } from "./store";
 import { hoursBetween } from "./time";
+import { actionLabel, needsAttention, severityBands } from "./severity";
 import { pcAxis, pcChange, pcFraction, trendPoints } from "./trend";
 
 const DATA = join(__dirname, "../../../../data/fixtures");
@@ -269,5 +270,23 @@ describe("one-at-a-time loading (D2)", () => {
     // Compare the grouping (which files form each event, in order); the event key is named after the first CDM to arrive, so it can differ.
     const shape = (s: Store) => s.getSnapshot().events.map((e) => e.revisions.map((r) => r.sourceFile).join(",")).sort();
     expect(shape(one)).toEqual(shape(bulk));
+  });
+});
+
+describe("severity bands and action labels (G7, G8)", () => {
+  it("has one band per severity, in the order ACTION, WATCH, LOW, ZERO, UNKNOWN", () => {
+    expect(severityBands().map((b) => b.severity)).toEqual(["ACTION", "WATCH", "LOW", "ZERO", "UNKNOWN"]);
+  });
+  it("states the limits from CONFIG in plain words, so the legend cannot drift from the rating", () => {
+    const [action, watch] = severityBands();
+    expect(action.range).toBe("Pc of 1 in 10,000 or higher");
+    expect(watch.range).toBe("Pc from 1 in 10,000,000 up to 1 in 10,000");
+  });
+  it("gives every severity an action label, and only ACTION asks for a maneuver", () => {
+    expect(actionLabel("ACTION")).toMatch(/maneuver/i);
+    for (const s of ["WATCH", "LOW", "ZERO", "UNKNOWN"] as const) expect(actionLabel(s)).not.toMatch(/maneuver/i);
+  });
+  it("marks ACTION, WATCH and UNKNOWN as needing attention", () => {
+    expect(["ACTION", "WATCH", "LOW", "ZERO", "UNKNOWN"].filter((s) => needsAttention(s as never))).toEqual(["ACTION", "WATCH", "UNKNOWN"]);
   });
 });

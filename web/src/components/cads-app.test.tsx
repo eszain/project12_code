@@ -51,6 +51,10 @@ it("starts empty, loads data, analyses with reasons, and resets", async () => {
   await user.click(screen.getByRole("button", { name: /Run risk analysis/ }));
   await waitFor(() => expect(list().getAllByText("ACTION")).toHaveLength(1));
   expect(list().getAllByText("ZERO")).toHaveLength(2);
+  // G7, G8: operator cards say what to do, and the legend explains the bands
+  expect(list().getByText("Action required: plan a maneuver")).toBeTruthy();
+  expect(list().getAllByText("No action")).toHaveLength(2);
+  expect(screen.getByRole("table", { name: "Severity bands" })).toBeTruthy();
 
   // C2: the Specialist view adds A1 to A3 detail; opening a card shows the explanation
   await user.click(screen.getByRole("button", { name: "Specialist view" }));
@@ -77,5 +81,5 @@ it("starts empty, loads data, analyses with reasons, and resets", async () => {
 
   await user.click(screen.getByRole("button", { name: "Reset" }));
   await waitFor(() => expect(screen.getByText(/Empty\. Press/)).toBeTruthy());
-  expect(within(document.body).queryByText("ACTION")).toBeNull(); // alerts cleared too
+  expect(screen.queryByRole("list", { name: "Event list" })).toBeNull(); // events (and their ACTION badges) cleared
 });

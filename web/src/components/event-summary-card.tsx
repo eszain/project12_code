@@ -4,6 +4,7 @@ import { formatShortOdds, missComponentsM, phoneSummary, type EventAnalysis } fr
 import type { NormalizedCdm, ObjectInfo } from "@/lib/cads/parser";
 import { lastObservations, positionSigmasM, type LastObservation } from "@/lib/cads/quality";
 import { CONFIG, latestRevision, type CdmEvent } from "@/lib/cads/store";
+import { actionLabel } from "@/lib/cads/severity";
 import { SeverityBadge } from "./severity-badge";
 import { hoursBetween, isoZ } from "@/lib/cads/time";
 
@@ -123,6 +124,7 @@ export function EventSummaryCard({
       </dl>
       {view === "operator" ? (
         <>
+          {analysis && <p className={`ops-action ops-action-${analysis.severity.toLowerCase()}`}>{actionLabel(analysis.severity)}</p>}
           <p className="ops-phone" aria-label="Phone summary">{phoneSummary(c, now)}</p>
           <button className="ops-link" onClick={onSelect}>Open full details (specialist view) <span aria-hidden="true">↗</span></button>
         </>
