@@ -7,7 +7,7 @@ import { loadDemoDocuments, sortByCreation } from "./demo";
 import { tradeStudy } from "./maneuver";
 import { parseDocument } from "./parser";
 import { recalculate } from "./pc";
-import { CONFIDENCE_LIMITS, calculationDetails, confidenceOf, missVsUncertainty } from "./details";
+import { CONFIDENCE_LIMITS, calculationDetails, confidenceOf, encounterPicture, missVsUncertainty } from "./details";
 import { lastObservations, positionSigmasM } from "./quality";
 import { CONFIG, Store } from "./store";
 import { hoursBetween } from "./time";
@@ -330,5 +330,28 @@ describe("miss distance against uncertainty and the calculation details (A4, A5,
     expect(d.objects[0].rssM).toBeCloseTo(Math.hypot(d.objects[0].radialM, d.objects[0].inTrackM, d.objects[0].crossTrackM), 9);
     expect(d.source.pcRaw).toBe(c.pcRaw);
     expect(d.source.missM).toBe(c.missDistanceM);
+  });
+});
+
+describe("conjunction picture geometry (G4)", () => {
+  const syn3 = () => parseDocument(readFileSync(join(PUBLIC, "fixtures/synthetic/synthetic_high_risk_3.json"), "utf8"), "s")[0].cdm!;
+  it("places the secondary at the in-plane miss, with 1, 2 and 3 sigma ellipses growing in that order", () => {
+    const p = encounterPicture(syn3());
+    if (!p.available) throw new Error(p.reason);
+    expect(Math.hypot(p.missX, p.missZ)).toBeCloseTo(62, 0);
+    expect(p.ellipses.map((e) => e.k)).toEqual([1, 2, 3]);
+    expect(p.ellipses[1].majorM).toBeCloseTo(2 * p.ellipses[0].majorM, 9);
+    expect(p.ellipses[2].majorM).toBeCloseTo(3 * p.ellipses[0].majorM, 9);
+    expect(p.ellipses.every((e) => e.majorM >= e.minorM)).toBe(true);
+  });
+  it("fits the miss point, the 3 sigma ellipse and the objects inside the view", () => {
+    const p = encounterPicture(syn3());
+    if (!p.available) throw new Error(p.reason);
+    expect(p.extentM).toBeGreaterThan(Math.hypot(p.missX, p.missZ) + p.ellipses[2].majorM);
+    expect(p.extentM).toBeGreaterThan(p.hbrM * 4);
+  });
+  it("is unavailable, with a reason, when the CDM has no covariance", () => {
+    const c = syn3();
+    expect(encounterPicture({ ...c, sat2: { ...c.sat2, covarianceRtn: null } }).available).toBe(false);
   });
 });

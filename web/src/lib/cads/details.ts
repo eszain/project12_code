@@ -59,6 +59,35 @@ export function missVsUncertainty(cdm: NormalizedCdm): MissVsUncertainty {
   }
 }
 
+export type EncounterPicture =
+  | { available: false; reason: string }
+  | {
+      available: true;
+      /** Position of the secondary relative to the primary in the encounter plane (metres). */
+      missX: number;
+      missZ: number;
+      /** 1, 2 and 3 sigma ellipses of the combined uncertainty, centred on the miss point. */
+      ellipses: { k: 1 | 2 | 3; majorM: number; minorM: number; angleDeg: number }[];
+      /** Combined size of the two objects (hard-body radius), centred on the primary. */
+      hbrM: number;
+      /** Half-width of a square view that fits everything, in metres. */
+      extentM: number;
+    };
+
+/** Geometry for the conjunction picture (G4): everything in metres, in the plane perpendicular to the relative velocity. */
+export function encounterPicture(cdm: NormalizedCdm): EncounterPicture {
+  try {
+    const ctx = buildContext(cdm, CONFIG.defaultHbrM);
+    const [mx, mz] = ctx.plane.miss2d;
+    const { major, minor, angleDeg } = eig2(ctx.plane.cov2d);
+    const ellipses = ([1, 2, 3] as const).map((k) => ({ k, majorM: major * k, minorM: minor * k, angleDeg }));
+    const extentM = Math.max(Math.hypot(mx, mz) + 3 * major, ctx.hbr.valueM * 4) * 1.08;
+    return { available: true, missX: mx, missZ: mz, ellipses, hbrM: ctx.hbr.valueM, extentM };
+  } catch (e) {
+    return { available: false, reason: (e as Error).message };
+  }
+}
+
 export interface ObjectUncertainty {
   label: string;
   radialM: number;

@@ -6,6 +6,7 @@ import { Navigation } from "@/components/navigation";
 import { EventSummaryCard } from "./event-summary-card";
 import { CalculationDetails } from "./calculation-details";
 import { CdmHistory } from "./cdm-history";
+import { EncounterPictureCard } from "./encounter-picture";
 import { ExplanationCard } from "./explanation-card";
 import { SeverityLegend } from "./severity-legend";
 import { analyzeEvent, type EventAnalysis } from "@/lib/cads/analyze";
@@ -190,6 +191,7 @@ export function CadsApp({ stepDelayMs = 900 }: { stepDelayMs?: number } = {}) {
 
         {view === "specialist" && selectedEvent && (
           <>
+            <EncounterPictureCard event={selectedEvent} />
             <CdmHistory event={selectedEvent} />
             <ExplanationCard event={selectedEvent} analysis={analysis?.[selectedEvent.id]} now={now} />
             <CalculationDetails event={selectedEvent} />

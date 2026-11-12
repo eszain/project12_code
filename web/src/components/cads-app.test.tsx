@@ -67,6 +67,7 @@ it("starts empty, loads data, analyses with reasons, and resets", async () => {
   expect(screen.getByText(/CDM history \(\d+ updates?, oldest first\)/)).toBeTruthy();
   expect(within(screen.getByRole("table", { name: "CDM history" })).getAllByRole("row").length).toBeGreaterThan(2); // header + at least 2 CDMs
   expect(screen.getByRole("img", { name: /^Pc trend across CDMs/ })).toBeTruthy();
+  expect(screen.getByRole("img", { name: /^Encounter plane for / })).toBeTruthy(); // G4
   expect(screen.getByRole("img", { name: /^Miss distance trend across CDMs/ })).toBeTruthy();
   expect(screen.getByText(/The Math/)).toBeTruthy();
   // A4, A5: miss against uncertainty on the card, and the four-step calculation details
