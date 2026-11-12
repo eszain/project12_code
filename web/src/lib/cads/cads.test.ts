@@ -7,6 +7,7 @@ import { loadDemoDocuments, sortByCreation } from "./demo";
 import { tradeStudy } from "./maneuver";
 import { parseDocument } from "./parser";
 import { recalculate } from "./pc";
+import { CONFIDENCE_LIMITS, calculationDetails, confidenceOf, missVsUncertainty } from "./details";
 import { lastObservations, positionSigmasM } from "./quality";
 import { CONFIG, Store } from "./store";
 import { hoursBetween } from "./time";
@@ -288,5 +289,46 @@ describe("severity bands and action labels (G7, G8)", () => {
   });
   it("marks ACTION, WATCH and UNKNOWN as needing attention", () => {
     expect(["ACTION", "WATCH", "LOW", "ZERO", "UNKNOWN"].filter((s) => needsAttention(s as never))).toEqual(["ACTION", "WATCH", "UNKNOWN"]);
+  });
+});
+
+describe("miss distance against uncertainty and the calculation details (A4, A5, E1)", () => {
+  const syn = (n: number) => parseDocument(readFileSync(join(PUBLIC, "fixtures/synthetic", `synthetic_high_risk_${n}.json`), "utf8"), "s")[0].cdm!;
+  it("turns the ratio into high, moderate or low confidence at the stated limits", () => {
+    expect(confidenceOf(CONFIDENCE_LIMITS.high)).toBe("high");
+    expect(confidenceOf(CONFIDENCE_LIMITS.high - 0.01)).toBe("moderate");
+    expect(confidenceOf(CONFIDENCE_LIMITS.low)).toBe("moderate");
+    expect(confidenceOf(CONFIDENCE_LIMITS.low - 0.01)).toBe("low");
+  });
+  it("rates a miss far larger than the uncertainty as high confidence, and one smaller than it as low", () => {
+    const clear = missVsUncertainty(cdm("reconstructed", "cdm_set_6.json"));
+    const close = missVsUncertainty(syn(3));
+    if (!clear.available || !close.available) throw new Error("expected both to be available");
+    expect(clear.confidence).toBe("high"); // 183 m miss, about 15 m uncertainty
+    expect(clear.ratio).toBeGreaterThan(10);
+    expect(close.confidence).toBe("low"); // 62 m miss, about 118 m uncertainty
+    expect(close.ratio).toBeLessThan(1);
+    expect(close.sentence).toMatch(/low confidence/i);
+  });
+  it("is unavailable, with a reason, when the CDM has no covariance", () => {
+    const c = cdm("reconstructed", "cdm_set_1.json");
+    const r = missVsUncertainty({ ...c, sat1: { ...c.sat1, covarianceRtn: null } });
+    expect(r.available).toBe(false);
+  });
+  it("reproduces the source Pc within 1% for the synthetic CDMs (CARA-style 2D method)", () => {
+    for (const n of [1, 2, 3]) {
+      const c = syn(n);
+      const rec = calculationDetails(c).recalculation;
+      if (!rec.available) throw new Error(rec.reason);
+      expect(Math.abs(rec.recalculatedPc / c.pc! - 1)).toBeLessThan(0.01);
+    }
+  });
+  it("lists both objects with RSS uncertainty and keeps the source values untouched", () => {
+    const c = syn(3);
+    const d = calculationDetails(c);
+    expect(d.objects).toHaveLength(2);
+    expect(d.objects[0].rssM).toBeCloseTo(Math.hypot(d.objects[0].radialM, d.objects[0].inTrackM, d.objects[0].crossTrackM), 9);
+    expect(d.source.pcRaw).toBe(c.pcRaw);
+    expect(d.source.missM).toBe(c.missDistanceM);
   });
 });

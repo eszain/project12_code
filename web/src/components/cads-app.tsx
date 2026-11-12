@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { Navigation } from "@/components/navigation";
 import { EventSummaryCard } from "./event-summary-card";
+import { CalculationDetails } from "./calculation-details";
 import { CdmHistory } from "./cdm-history";
 import { ExplanationCard } from "./explanation-card";
 import { SeverityLegend } from "./severity-legend";
@@ -191,6 +192,7 @@ export function CadsApp({ stepDelayMs = 900 }: { stepDelayMs?: number } = {}) {
           <>
             <CdmHistory event={selectedEvent} />
             <ExplanationCard event={selectedEvent} analysis={analysis?.[selectedEvent.id]} now={now} />
+            <CalculationDetails event={selectedEvent} />
           </>
         )}
 

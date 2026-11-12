@@ -5,6 +5,7 @@ import type { NormalizedCdm, ObjectInfo } from "@/lib/cads/parser";
 import { lastObservations, positionSigmasM, type LastObservation } from "@/lib/cads/quality";
 import { CONFIG, latestRevision, type CdmEvent } from "@/lib/cads/store";
 import { actionLabel } from "@/lib/cads/severity";
+import { MissVsUncertaintyBlock } from "./calculation-details";
 import { SeverityBadge } from "./severity-badge";
 import { hoursBetween, isoZ } from "@/lib/cads/time";
 
@@ -131,6 +132,7 @@ export function EventSummaryCard({
       ) : (
         <>
           <MissSplit cdm={c} />
+          <MissVsUncertaintyBlock cdm={c} />
           <LastObs cdm={c} now={now} />
           <div className="ops-block">
             <div className="ops-block-title">Position uncertainty, 1σ (R radial · I in-track · C cross-track)</div>

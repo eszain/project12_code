@@ -99,3 +99,19 @@ h3.ops-title { cursor: default; }
 .legend-panel summary { color: var(--cyan); cursor: pointer; font-size: .72rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
 .legend-panel .panel-note { margin: 12px 0; }
 .legend-table { min-width: 0; table-layout: auto; }
+
+/* A4 confidence tag and A5 calculation details */
+.confidence { border-radius: 999px; font-size: .62rem; font-weight: 700; letter-spacing: .08em; padding: 3px 9px; text-transform: uppercase; }
+.confidence-high { background: rgba(89, 216, 176, .12); border: 1px solid rgba(89, 216, 176, .4); color: #a9eed9; }
+.confidence-moderate { background: rgba(255, 190, 104, .1); border: 1px solid rgba(255, 190, 104, .4); color: #ffd59b; }
+.confidence-low { background: rgba(255, 98, 76, .12); border: 1px solid rgba(255, 121, 84, .5); color: #ffb3a1; }
+.calc-panel summary { color: var(--cyan); cursor: pointer; font-size: .8rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.calc-panel p, .calc-panel li { color: #c9dbe8; font-size: .8rem; line-height: 1.65; }
+.calc-panel code { color: #e9f7ff; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .74rem; }
+.calc-step { color: white; font-size: .95rem; letter-spacing: -.01em; margin: 22px 0 6px; }
+.calc-list { margin: 8px 0 0; padding-left: 18px; }
+.calc-raw { margin-top: 20px; }
+.calc-raw summary { color: var(--site-muted); font-size: .68rem; }
+.cov-table { margin: 12px 0; min-width: 0; table-layout: auto; width: auto; }
+.cov-table caption { color: var(--site-muted); font-size: .66rem; margin-bottom: 6px; text-align: left; }
+.cov-table td { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .7rem; padding: 6px 12px; }

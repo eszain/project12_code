@@ -69,6 +69,11 @@ it("starts empty, loads data, analyses with reasons, and resets", async () => {
   expect(screen.getByRole("img", { name: /^Pc trend across CDMs/ })).toBeTruthy();
   expect(screen.getByRole("img", { name: /^Miss distance trend across CDMs/ })).toBeTruthy();
   expect(screen.getByText(/The Math/)).toBeTruthy();
+  // A4, A5: miss against uncertainty on the card, and the four-step calculation details
+  expect(within(list().getAllByRole("listitem")[0]).getByText(/Miss distance compared with uncertainty/)).toBeTruthy();
+  expect(screen.getByText("How this was calculated")).toBeTruthy();
+  expect(screen.getByText(/Step 4\. Our own check of the collision chance/)).toBeTruthy();
+  expect(screen.getByRole("table", { name: "Position uncertainty by object" })).toBeTruthy();
   expect(screen.getByText(/Quick Summary/)).toBeTruthy();
   expect(document.body.textContent).not.toMatch(/textlimit|frac1/); // LaTeX rendered, not shown as raw commands
 
