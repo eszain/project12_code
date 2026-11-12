@@ -66,6 +66,7 @@ it("starts empty, loads data, analyses with reasons, and resets", async () => {
   expect(screen.getByRole("img", { name: /^Miss distance trend across CDMs/ })).toBeTruthy();
   expect(screen.getByText(/The Math/)).toBeTruthy();
   expect(screen.getByText(/Quick Summary/)).toBeTruthy();
+  expect(document.body.textContent).not.toMatch(/textlimit|frac1/); // LaTeX rendered, not shown as raw commands
 
   // Operator cards can open the specialist details for that event
   await user.click(screen.getByRole("button", { name: "Operator view" }));

@@ -1,5 +1,5 @@
 /* Dashboard additions on top of site.css: the parts of the CDM app that have no site.css equivalent.
-   Colours and spacing reuse the site.css variables (--cyan, --line, --muted). */
+   Colours and spacing reuse the site.css variables (--cyan, --line, --site-muted). */
 
 /* Action row: load, analyse, reset, and the status line */
 .console-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 22px; }
@@ -15,6 +15,73 @@
 .view-option[aria-pressed="true"] { background: var(--cyan); color: #04101c; font-weight: 700; }
 .panel-note { color: var(--site-muted); font-size: .72rem; line-height: 1.5; margin: -8px 0 18px; }
 
+/* UI-kit colour tokens (used by the explanation's inner boxes) mapped to the console palette */
+.console-shell {
+  --background: #040a13; --foreground: #f3f8ff; --card: rgba(10, 27, 48, .58); --card-foreground: #f3f8ff;
+  --muted: rgba(20, 55, 80, .45); --muted-foreground: #8ca5bd; --border: rgba(151, 218, 255, .18);
+  --primary: #6ee0ff; --primary-foreground: #04101c;
+}
+
+/* Severity badge tone for ACTION (site.css has review / complete / partial / neutral) */
+.status-action { background: rgba(255, 98, 76, .12); border-color: rgba(255, 121, 84, .6); color: #ffb3a1; }
+.status-action .status-badge-dot { background: #ff6a4c; box-shadow: 0 0 8px rgba(255, 106, 76, .8); }
+
+/* Event cards */
+.ops-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); list-style: none; margin: 0; padding: 0; }
+.ops-card { background: linear-gradient(140deg, rgba(17, 43, 68, .74), rgba(7, 17, 29, .65)); border: 1px solid var(--line); border-radius: 12px; display: grid; gap: 16px; height: 100%; padding: 18px; transition: border-color .2s ease; }
+.ops-card:hover { border-color: rgba(110, 224, 255, .4); }
+.ops-card.is-selected { border-color: var(--cyan); box-shadow: 0 0 0 1px var(--cyan), 0 0 28px rgba(110, 224, 255, .16); }
+.ops-card-head { align-items: start; display: flex; gap: 12px; justify-content: space-between; }
+.ops-title { background: none; border: 0; color: #eef8ff; cursor: pointer; font: inherit; font-size: .95rem; font-weight: 700; letter-spacing: -.01em; margin: 0; padding: 0; text-align: left; }
+button.ops-title:hover, button.ops-title:focus-visible { color: var(--cyan); }
+h3.ops-title { cursor: default; }
+.ops-pending { color: var(--site-muted); font-size: .66rem; font-style: italic; white-space: nowrap; }
+.ops-metrics { display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0; }
+.ops-metrics > div { display: grid; grid-template-rows: auto auto 1fr; }
+.ops-metrics dt { color: var(--site-muted); font-size: .58rem; letter-spacing: .12em; line-height: 1.35; margin-bottom: 6px; min-height: 2.7em; text-transform: uppercase; }
+.ops-metrics dd { margin: 0; }
+.ops-value { color: white; font-size: 1.15rem; font-weight: 700; letter-spacing: -.02em; }
+.ops-sub { color: var(--site-muted); font-size: .62rem; margin-top: 4px !important; overflow-wrap: anywhere; }
+.ops-sub code, .ops-history-table code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.ops-phone { background: rgba(110, 224, 255, .07); border-left: 2px solid var(--cyan); color: #d9f2ff; font-size: .8rem; line-height: 1.55; margin: 0; padding: 10px 12px; }
+.ops-link { background: none; border: 0; color: var(--cyan); cursor: pointer; font: inherit; font-size: .66rem; justify-self: start; letter-spacing: .08em; padding: 0; text-transform: uppercase; }
+.ops-link:hover { text-decoration: underline; }
+.ops-block { background: rgba(5, 15, 27, .55); border: 1px solid rgba(151, 218, 255, .1); display: grid; gap: 6px; padding: 10px 12px; }
+.ops-block-title { color: var(--site-muted); font-size: .58rem; letter-spacing: .12em; text-transform: uppercase; }
+.ops-row { color: #dcecf7; font-size: .76rem; }
+.ops-row-label { color: var(--site-muted); }
+.ops-split { display: grid; gap: 8px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.ops-split-cell { display: grid; gap: 3px; padding: 6px 8px; }
+.ops-split-cell span { color: var(--site-muted); font-size: .62rem; }
+.ops-split-cell strong { color: white; font-size: .9rem; }
+.ops-split-cell.is-key { background: rgba(110, 224, 255, .1); border: 1px solid rgba(110, 224, 255, .5); }
+.ops-split-cell.is-key span { color: var(--cyan); }
+.ops-warning { background: rgba(255, 190, 104, .1); border: 1px solid rgba(255, 190, 104, .45); color: #ffd59b; font-size: .72rem; margin: 4px 0 0; padding: 6px 9px; }
+
+/* Selected-event panels: CDM history and explanation */
+.ops-panel { border-radius: 14px; margin-top: 20px; }
+.ops-history-table { min-width: 760px; }
+.dashboard-redesign .ops-history-table { table-layout: auto; }
+.ops-history-table td, .ops-history-table th { white-space: nowrap; }
+.ops-file { color: var(--site-muted); font-size: .66rem; }
+.change-higher { color: #ffb3a1; }
+.change-lower { color: #a9eed9; }
+.ops-charts { display: grid; gap: 20px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 22px; }
+.ops-charts figure { background: rgba(5, 15, 27, .55); border: 1px solid rgba(151, 218, 255, .1); margin: 0; padding: 12px 14px; }
+.ops-charts figcaption { color: #c9dbe8; font-size: .7rem; margin-bottom: 8px; }
+.chart { display: block; width: 100%; }
+.chart-grid { stroke: rgba(151, 218, 255, .16); }
+.chart-label { fill: var(--site-muted); font-size: 9px; }
+.chart-line { fill: none; stroke: var(--cyan); stroke-width: 1.5; }
+.chart-dot { fill: var(--cyan); stroke: var(--cyan); stroke-width: 1.5; }
+.chart-dot.is-zero { fill: #040a13; }
+.ops-foot { margin: 14px 0 0; }
+.ops-explain h2 { font-size: 1.35rem; }
+.ops-explain-meta { margin: 8px 0 0; }
+.ops-explain .katex { color: #eef8ff; }
+
 @media (max-width: 820px) {
   .events-panel .panel-heading { align-items: start; flex-direction: column; gap: 14px; }
+  .ops-grid { grid-template-columns: minmax(0, 1fr); }
+  .ops-charts { grid-template-columns: minmax(0, 1fr); }
 }
