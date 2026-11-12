@@ -100,8 +100,9 @@ export function EventSummaryCard({
   selected: boolean;
   onSelect: () => void;
   view: "operator" | "specialist";
-  archived: boolean;
-  onToggleArchive: () => void;
+  /** Archive state and toggle; leave out to hide the Archive button (for example in a details sidebar). */
+  archived?: boolean;
+  onToggleArchive?: () => void;
 }) {
   const c = latestRevision(event).cdm;
   const title = `${c.sat1.name ?? c.sat1.designator} / ${c.sat2.name ?? c.sat2.designator}`;
@@ -133,7 +134,7 @@ export function EventSummaryCard({
           <p className="ops-phone" aria-label="Phone summary">{phoneSummary(c, now)}</p>
           <div className="ops-links">
             <button className="ops-link" onClick={onSelect}>Open full details (specialist view) <span aria-hidden="true">↗</span></button>
-            <button className="ops-link ops-link-quiet" onClick={onToggleArchive}>{archived ? "Restore to active" : "Archive"}</button>
+            {onToggleArchive && <button className="ops-link ops-link-quiet" onClick={onToggleArchive}>{archived ? "Restore to active" : "Archive"}</button>}
           </div>
         </>
       ) : (
@@ -146,9 +147,11 @@ export function EventSummaryCard({
             <Uncertainty o={c.sat1} />
             <Uncertainty o={c.sat2} />
           </div>
-          <div className="ops-links">
-            <button className="ops-link ops-link-quiet" onClick={onToggleArchive}>{archived ? "Restore to active" : "Archive"}</button>
-          </div>
+          {onToggleArchive && (
+            <div className="ops-links">
+              <button className="ops-link ops-link-quiet" onClick={onToggleArchive}>{archived ? "Restore to active" : "Archive"}</button>
+            </div>
+          )}
         </>
       )}
     </article>

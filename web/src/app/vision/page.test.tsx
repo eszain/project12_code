@@ -17,7 +17,7 @@ it("shows every module with its stage, built ones link to the dashboard, planned
   expect(cards).toHaveLength(MODULES.length);
   for (const m of MODULES) {
     const card = within(screen.getByRole("article", { name: m.title }));
-    if (m.stage === "built") expect(card.getByRole("link", { name: /Open in the dashboard/ }).getAttribute("href")).toBe("/dashboard");
+    if (m.stage === "built") expect(card.getByRole("link", { name: /Open in the full dashboard/ }).getAttribute("href")).toBe("/old-dashboard");
     else expect((card.getByRole("button", { name: "Coming soon" }) as HTMLButtonElement).disabled).toBe(true);
   }
 });

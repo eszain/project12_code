@@ -1,5 +1,7 @@
-import { CadsApp } from "@/components/cads-app";
+import { VisualDashboard } from "@/components/visual/visual-dashboard";
+
+export const metadata = { title: "CADS | Dashboard" };
 
 export default function DashboardPage() {
-  return <CadsApp />;
+  return <VisualDashboard />;
 }

@@ -171,3 +171,14 @@ h3.ops-title { cursor: default; }
 .release-line span { color: #dcecf7; font-size: .76rem; }
 .release-line small { color: var(--site-muted); font-size: .64rem; }
 @media (max-width: 820px) { .vision-summary { grid-template-columns: 1fr; } .release-line { grid-template-columns: 1fr 1fr; } .vision-grid { grid-template-columns: minmax(0, 1fr); } }
+
+/* Visual dashboard (/dashboard): Animate UI sidebars in the console palette */
+.cads-app {
+  --sidebar: #06111f; --sidebar-foreground: #dcecf7; --sidebar-primary: #6ee0ff; --sidebar-primary-foreground: #04101c;
+  --sidebar-accent: rgba(110, 224, 255, .1); --sidebar-accent-foreground: #ffffff; --sidebar-border: rgba(151, 218, 255, .16); --sidebar-ring: #6ee0ff;
+  --background: #040a13; --foreground: #f3f8ff; --muted-foreground: #8ca5bd; --border: rgba(151, 218, 255, .18);
+  background: radial-gradient(circle at 70% 0%, rgba(24, 105, 170, .16), transparent 32%), #040a13;
+}
+.cads-inset { background: transparent; min-width: 0; }
+.cads-inner { min-height: 100svh; }
+.cads-centre { flex: 1 1 auto; min-width: 0; }
