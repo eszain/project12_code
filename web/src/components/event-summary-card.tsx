@@ -91,6 +91,8 @@ export function EventSummaryCard({
   selected,
   onSelect,
   view,
+  archived,
+  onToggleArchive,
 }: {
   event: CdmEvent;
   analysis?: EventAnalysis;
@@ -98,6 +100,8 @@ export function EventSummaryCard({
   selected: boolean;
   onSelect: () => void;
   view: "operator" | "specialist";
+  archived: boolean;
+  onToggleArchive: () => void;
 }) {
   const c = latestRevision(event).cdm;
   const title = `${c.sat1.name ?? c.sat1.designator} / ${c.sat2.name ?? c.sat2.designator}`;
@@ -127,7 +131,10 @@ export function EventSummaryCard({
         <>
           {analysis && <p className={`ops-action ops-action-${analysis.severity.toLowerCase()}`}>{actionLabel(analysis.severity)}</p>}
           <p className="ops-phone" aria-label="Phone summary">{phoneSummary(c, now)}</p>
-          <button className="ops-link" onClick={onSelect}>Open full details (specialist view) <span aria-hidden="true">↗</span></button>
+          <div className="ops-links">
+            <button className="ops-link" onClick={onSelect}>Open full details (specialist view) <span aria-hidden="true">↗</span></button>
+            <button className="ops-link ops-link-quiet" onClick={onToggleArchive}>{archived ? "Restore to active" : "Archive"}</button>
+          </div>
         </>
       ) : (
         <>
@@ -138,6 +145,9 @@ export function EventSummaryCard({
             <div className="ops-block-title">Position uncertainty, 1σ (R radial · I in-track · C cross-track)</div>
             <Uncertainty o={c.sat1} />
             <Uncertainty o={c.sat2} />
+          </div>
+          <div className="ops-links">
+            <button className="ops-link ops-link-quiet" onClick={onToggleArchive}>{archived ? "Restore to active" : "Archive"}</button>
           </div>
         </>
       )}

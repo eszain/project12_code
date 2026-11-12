@@ -19,6 +19,7 @@ export function formatOdds(pc: number | null | undefined): string {
   if (pc >= 1) return "100% (guaranteed collision)";
   const oneInN = Math.round(1 / pc);
   const pct = pc * 100;
+  if (oneInN >= 1_000_000_000) return "less than 1 in 1 billion (practically zero)";
   if (oneInN >= 1_000_000) {
     const m = (oneInN / 1_000_000).toFixed(1).replace(/\.0$/, "");
     return `1 in ${m} million (less than 0.001%)`;
@@ -38,6 +39,7 @@ export function formatShortOdds(pc: number | null | undefined): string {
   if (pc === 0) return "0%";
   if (pc >= 1) return "100%";
   const oneInN = Math.round(1 / pc);
+  if (oneInN >= 1_000_000_000) return "< 1 in 1B";
   if (oneInN >= 1_000_000) {
     const m = (oneInN / 1_000_000).toFixed(1).replace(/\.0$/, "");
     return `1 in ${m}M`;

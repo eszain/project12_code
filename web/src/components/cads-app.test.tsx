@@ -89,3 +89,69 @@ it("starts empty, loads data, analyses with reasons, and resets", async () => {
   await waitFor(() => expect(screen.getByText(/Empty\. Press/)).toBeTruthy());
   expect(screen.queryByRole("list", { name: "Event list" })).toBeNull(); // events (and their ACTION badges) cleared
 });
+
+it("archives and restores events, and filters by search and severity after the analysis", async () => {
+  const user = userEvent.setup();
+  render(<CadsApp stepDelayMs={0} />);
+  await user.click(screen.getByRole("button", { name: /Load data/ }));
+  await waitFor(() => expect(screen.getByText(/Loaded 9 CDMs one at a time/)).toBeTruthy());
+  const list = () => within(screen.getByRole("list", { name: "Event list" }));
+  expect(list().getAllByRole("listitem")).toHaveLength(3);
+
+  // D1: archive one event by hand; it moves to the Archived tab and back
+  await user.click(within(list().getAllByRole("listitem")[0]).getByRole("button", { name: "Archive" }));
+  expect(list().getAllByRole("listitem")).toHaveLength(2);
+  expect(screen.getByRole("button", { name: "Active (2)" })).toBeTruthy();
+  await user.click(screen.getByRole("button", { name: "Archived (1)" }));
+  expect(list().getAllByRole("listitem")).toHaveLength(1);
+  await user.click(within(list().getAllByRole("listitem")[0]).getByRole("button", { name: "Restore to active" }));
+  await user.click(screen.getByRole("button", { name: "Active (3)" }));
+  expect(list().getAllByRole("listitem")).toHaveLength(3);
+
+  // G6: severity filters wait for the analysis, then work
+  const severity = screen.getByLabelText("Severity") as HTMLSelectElement;
+  expect(severity.disabled).toBe(true);
+  await user.click(screen.getByRole("button", { name: /Run risk analysis/ }));
+  await waitFor(() => expect(severity.disabled).toBe(false));
+  await user.selectOptions(severity, "ACTION");
+  expect(list().getAllByRole("listitem")).toHaveLength(1);
+  await user.selectOptions(severity, "all");
+  await user.click(screen.getByLabelText("Needs attention only"));
+  expect(list().getAllByRole("listitem")).toHaveLength(1);
+  await user.click(screen.getByLabelText("Needs attention only"));
+  await user.type(screen.getByPlaceholderText(/Search object name or number/), "debris");
+  expect(list().getAllByRole("listitem").length).toBeGreaterThan(0);
+  await user.clear(screen.getByPlaceholderText(/Search object name or number/));
+  await user.type(screen.getByPlaceholderText(/Search object name or number/), "zzz");
+  expect(screen.getByText(/No active events match these filters/)).toBeTruthy();
+});
+
+it("adds generated test events, pages through them, and reset clears them", async () => {
+  const user = userEvent.setup();
+  render(<CadsApp stepDelayMs={0} />);
+  await user.click(screen.getByRole("button", { name: /Add 60 test events/ }));
+  await waitFor(() => expect(screen.getByText(/Added 60 generated test events/)).toBeTruthy(), { timeout: 8000 });
+  const list = () => within(screen.getByRole("list", { name: "Event list" }));
+  expect(list().getAllByRole("listitem")).toHaveLength(6); // one page
+  expect(screen.getByText(/Showing 1–6 of \d+/)).toBeTruthy();
+  const first = list().getAllByRole("listitem")[0].textContent;
+  await user.click(screen.getByRole("button", { name: "Next" }));
+  expect(screen.getByText(/Page 2 of \d+/)).toBeTruthy();
+  expect(list().getAllByRole("listitem")[0].textContent).not.toBe(first);
+  await user.click(screen.getByRole("button", { name: "Reset" }));
+  await waitFor(() => expect(screen.getByText(/Empty\. Press/)).toBeTruthy());
+}, 20000);
+
+it("loads CDM files the user chooses, one at a time, and reports a bad file", async () => {
+  const user = userEvent.setup();
+  render(<CadsApp stepDelayMs={0} />);
+  const good = new File([readFileSync(join(__dirname, "../../public/fixtures/synthetic/synthetic_high_risk_3.json"), "utf8")], "mine.json", { type: "application/json" });
+  const bad = new File(["this is not a CDM"], "broken.txt", { type: "text/plain" });
+  await user.upload(screen.getByLabelText("Choose CDM files (JSON or KVN)"), [good, bad]);
+  await waitFor(() => expect(screen.getByText(/Loaded 1 CDMs one at a time/)).toBeTruthy());
+  expect(screen.getByText(/1 rejected \(broken\.txt/)).toBeTruthy();
+  // The file's closest approach (Feb 2026) has passed, so the event archives itself and the empty Active list says why.
+  expect(screen.getByText(/1 archived event \(closest approach already passed\)/)).toBeTruthy();
+  await user.click(screen.getByRole("button", { name: "Archived (1)" }));
+  expect(within(screen.getByRole("list", { name: "Event list" })).getAllByRole("listitem")).toHaveLength(1);
+});

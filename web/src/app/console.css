@@ -127,3 +127,18 @@ h3.ops-title { cursor: default; }
 .hbr-circle { fill: rgba(255, 106, 76, .75); stroke: #ff9b52; stroke-width: 1.2; }
 .encounter-text p { color: #c9dbe8; font-size: .82rem; line-height: 1.65; margin: 0 0 12px; }
 @media (max-width: 820px) { .encounter-layout { grid-template-columns: minmax(0, 1fr); } }
+
+/* Register toolbar, pager, archive links, and the third button style (D1, G5, G6, E2) */
+.button-tertiary { background: transparent; border: 1px dashed rgba(110, 224, 255, .35) !important; color: #b6d9ea; cursor: pointer; font-family: inherit; }
+.button-tertiary:hover { border-color: var(--cyan) !important; color: white; }
+.register-bar { margin-bottom: 18px; }
+.register-bar .view-switch { align-self: end; }
+.check-filter { align-items: center; display: flex !important; gap: 8px !important; padding-bottom: 9px; }
+.check-filter input { accent-color: var(--cyan); height: 15px; min-height: 0 !important; min-width: 0 !important; padding: 0 !important; width: 15px; }
+.filter-hint { flex-basis: 100%; margin: 0 !important; }
+.filter-bar select:disabled, .check-filter input:disabled { cursor: not-allowed; opacity: .45; }
+.pager { align-items: center; color: var(--site-muted); display: flex; flex-wrap: wrap; font-size: .72rem; gap: 14px; justify-content: space-between; margin-top: 20px; }
+.pager-button { border: 1px solid var(--line); }
+.pager-button:disabled { cursor: not-allowed; opacity: .4; }
+.ops-links { align-items: center; display: flex; flex-wrap: wrap; gap: 18px; justify-content: space-between; }
+.ops-link-quiet { color: var(--site-muted); }
