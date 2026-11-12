@@ -17,23 +17,31 @@ The page starts empty (the database is wiped on every start; set `CADS_PERSIST=t
 
 Live demo: https://project12-code.vercel.app (also https://project12code.vercel.app)
 
-Same workflow as the Python app, but the core logic (parser, grouping, severity, experimental Pc, maneuver trade, alerts) is a TypeScript port that runs in the browser tab. Nothing is stored or sent anywhere; refresh or **Reset** clears it. UI: Next.js 16, Tailwind, shadcn and Animate UI components, light/dark/system theme toggle.
+Same workflow as the Python app, but the core logic (parser, grouping, severity, experimental Pc, maneuver trade, alerts) is a TypeScript port that runs in the browser tab. Nothing is stored or sent anywhere; refresh or **Reset** clears it. UI: Next.js 16, Tailwind, a dark console design, and a three.js Earth on the landing page.
+
+| Route | What it shows |
+|---|---|
+| `/` | Landing page: 3D Earth with orbits, feature overview, **Open Dashboard** |
+| `/dashboard` | The CDM app: load data, run risk analysis, Operator / Specialist views, CDM history and trend charts, plain-language explanation |
+| `/events`, `/analysis`, `/alerts` | Placeholder pages for planned features |
 
 ```
 cd web
 npm install
 npm run dev        # http://localhost:3000
-npm test           # 13 tests: port checked against the Python Pc results, plus a click-through UI test
+npm test           # port checked against the Python Pc results, plus click-through UI tests
 npm run build
 ```
 
-Press **1. Load data** (bundled sample CDMs from `web/public/fixtures`, re-dated to now), then **2. Run risk analysis** for Severity and Why, **Reset** to clear. Click a row for revisions, data quality and the maneuver study.
+On `/dashboard`, press **1. Load data**: the 9 bundled sample CDMs (`web/public/fixtures`, re-dated to now) load one at a time, oldest first. The six reconstructed SCISAT 1 CDMs form two encounters and the three synthetic CADS TEST CDMs form a third. Then press **2. Run risk analysis** for the severity of each event. The **Operator view** shows only TCA, miss distance, Pc and a one-line call summary; the **Specialist view** adds the radial / in-track / cross-track split, last observations, position uncertainty, and, after clicking an event, its CDM history, trend charts and explanation. **Reset** clears everything.
+
+On Windows, run the tests from a shell whose path starts with an upper-case drive letter (for example PowerShell in `C:\...`); with a lower-case `c:` path Vitest loads twice and every suite fails.
 
 **Deploy to Vercel:** import the repo and set *Root Directory* to `project12_code/web`. No environment variables or backend are needed.
 
 Differences from the Python app: alerts appear in an in-page list (download as `alerts.jsonl`); email/webhook delivery, persistence and live Space-Track access are not possible in a browser-only app. Timestamps are millisecond precision (JS `Date`). The Python app remains the reference implementation and the path to a real backend.
 
-Licence note: Animate UI is MIT + Commons Clause (fine inside an app, not an OSI open-source licence). Decide the project licence with this in mind.
+Third-party assets: the Earth textures are credited in `web/public/assets/earth/README.md` (NASA Blue Marble and three.js example textures).
 
 ## What is built (Python app)
 
