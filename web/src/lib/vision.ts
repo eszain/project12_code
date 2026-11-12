@@ -2,7 +2,7 @@
 
 export type Stage = "built" | "next" | "later";
 
-export const STAGE_LABEL: Record<Stage, string> = { built: "Built (v0.3)", next: "Next 7 days (proposed)", later: "Later" };
+export const STAGE_LABEL: Record<Stage, string> = { built: "Built (v0.2.5)", next: "Next 7 days (proposed)", later: "Later" };
 
 export interface VisionModule {
   id: string;
