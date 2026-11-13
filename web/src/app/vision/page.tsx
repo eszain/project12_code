@@ -57,7 +57,7 @@ export default function VisionPage() {
               <footer>
                 <span className="vision-release">Release {m.release}</span>
                 {m.stage === "built" ? (
-                  <Link className="ops-link" href="/dashboard">Open in the dashboard ↗</Link>
+                  <Link className="ops-link" href="/old-dashboard">Open in the full dashboard ↗</Link>
                 ) : (
                   <button className="ops-link ops-link-quiet" disabled aria-disabled="true" title="Not built yet">Coming soon</button>
                 )}

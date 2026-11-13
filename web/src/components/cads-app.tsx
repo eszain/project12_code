@@ -1,22 +1,20 @@
 "use client";
 
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useRef, useState } from "react";
 
 import { Navigation } from "@/components/navigation";
 import { EventSummaryCard } from "./event-summary-card";
 import { CalculationDetails } from "./calculation-details";
+import { ImportReportSheet } from "./import-report-sheet";
+import { OriginalCdm } from "./original-cdm";
 import { CdmHistory } from "./cdm-history";
 import { EncounterPictureCard } from "./encounter-picture";
 import { ExplanationCard } from "./explanation-card";
 import { SeverityLegend } from "./severity-legend";
-import { analyzeEvent, type EventAnalysis } from "@/lib/cads/analyze";
-import { loadDemoDocuments, loadScaleDocuments, sortByCreation } from "@/lib/cads/demo";
 import { DEFAULT_FILTERS, PAGE_SIZE, filterAndSort, isArchived, paginate, statusCounts, type RegisterFilters } from "@/lib/cads/register";
-import { CONFIG, Store, latestRevision, type Snapshot } from "@/lib/cads/store";
+import { latestRevision } from "@/lib/cads/store";
+import { SCALE_BATCH, useCadsSession } from "./use-cads-session";
 import { hoursBetween } from "@/lib/cads/time";
-
-const EMPTY: Snapshot = { events: [], rules: [], alerts: [] };
-const SCALE_BATCH = 60;
 
 function SummaryCard({ label, value, detail, icon, tone }: { label: string; value: string; detail: string; icon: string; tone: "cyan" | "amber" | "purple" | "green" }) {
   return (
@@ -33,124 +31,30 @@ function SummaryCard({ label, value, detail, icon, tone }: { label: string; valu
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
 
-const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
-
-type Doc = { name: string; content: string; label: string };
-
 export function CadsApp({ stepDelayMs = 900 }: { stepDelayMs?: number } = {}) {
-  const [store] = useState(() => new Store());
-  const snap = useSyncExternalStore(store.subscribe, store.getSnapshot, () => EMPTY);
-  const [analysis, setAnalysis] = useState<Record<number, EventAnalysis> | null>(null);
+  const session = useCadsSession({ stepDelayMs });
+  const { snap, analysis, status, importReport, busy, now } = session;
+  const [reportOpen, setReportOpen] = useState(false);
   const [selected, setSelected] = useState<number | null>(null);
-  const [status, setStatus] = useState("The table is empty. Press “1. Load data”.");
-  const [busy, setBusy] = useState(false);
   // Operator view: only the key numbers and a one-line call summary. Specialist view: full detail.
   const [view, setView] = useState<"operator" | "specialist">("operator");
-  // "Now" lives in state (refreshed by every action) because reading the clock during render is not allowed here.
-  const [now, setNow] = useState(0);
   const [filters, setFilters] = useState<RegisterFilters>(DEFAULT_FILTERS);
   const [page, setPage] = useState(1);
   // Events the user archived (true) or kept active (false) by hand; otherwise a passed closest approach archives it.
   const [archiveOverride, setArchiveOverride] = useState<Record<number, boolean>>({});
-  const scaleCount = useRef(0);
   const fileInput = useRef<HTMLInputElement>(null);
-  const alive = useRef(true);
-  useEffect(() => {
-    alive.current = true;
-    return () => {
-      alive.current = false;
-    };
-  }, []);
 
-  const run = async (fn: () => Promise<string> | string) => {
-    setBusy(true);
-    setNow(Date.now());
-    try {
-      setStatus(await fn());
-    } catch (e) {
-      setStatus(`Error: ${(e as Error).message}`);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const ensureDefaultRule = () => {
-    if (!store.getSnapshot().rules.length) store.addRule({ name: "Pc >= 1e-4 (CSA action level)", pcMin: CONFIG.pcAction, missDistanceMaxM: null, hoursToTcaMax: null, objectIds: [] });
-  };
-
-  const analyseAll = () => {
-    const t = Date.now();
-    const next: Record<number, EventAnalysis> = {};
-    store.getSnapshot().events.forEach((e) => (next[e.id] = analyzeEvent(e, t)));
-    return next;
-  };
-
-  // D2: feed the CDMs in creation order, one at a time; each is fully stored (and alert rules evaluated) before the next.
-  const feedDocuments = async (docs: Doc[], intro: string) => {
-    ensureDefaultRule();
-    const ordered = sortByCreation(docs);
-    const total = { imported: 0, duplicate: 0, rejected: 0 };
-    const problems: string[] = [];
-    for (let i = 0; i < ordered.length; i++) {
-      if (!alive.current) return "Loading stopped.";
-      setNow(Date.now());
-      setStatus(`Loading CDM ${i + 1} of ${ordered.length}: ${ordered[i].name}`);
-      const r = store.importDocuments([ordered[i]]);
-      total.imported += r.counts.imported;
-      total.duplicate += r.counts.duplicate;
-      total.rejected += r.counts.rejected;
-      r.records.filter((x) => x.status === "rejected").forEach((x) => problems.push(`${x.file}: ${x.errors[0] ?? "rejected"}`));
-      if (i < ordered.length - 1) await sleep(stepDelayMs);
-    }
-    const rejected = total.rejected ? ` ${total.rejected} rejected (${problems.slice(0, 2).join("; ")}${problems.length > 2 ? "; …" : ""}).` : "";
-    return `Loaded ${total.imported} CDMs one at a time, oldest first (${total.duplicate} repeats ignored).${rejected} ${intro}`;
-  };
-
-  const loadData = () =>
-    run(async () => {
-      const { docs, shiftHours } = await loadDemoDocuments();
-      setAnalysis(null);
-      setSelected(null);
-      return feedDocuments(docs, `Sample dates shifted by ${shiftHours} h so the encounters are upcoming. Now run the risk analysis.`);
-    });
-
-  // E2: the same one-at-a-time loading for CDM files chosen by the user (JSON or CCSDS KVN).
-  const loadFiles = (files: FileList | null) => {
-    if (!files?.length) return;
-    return run(async () => {
-      const docs: Doc[] = await Promise.all(Array.from(files).map(async (f) => ({ name: f.name, content: await f.text(), label: "uploaded" })));
-      setAnalysis(null);
-      return feedDocuments(docs, "Dates are used as they are in your files. Now run the risk analysis.");
-    });
-  };
-
-  // G5: add generated test events so the layout can be tried with many events. They are invented values.
-  const addTestEvents = () =>
-    run(async () => {
-      const docs = await loadScaleDocuments(SCALE_BATCH, scaleCount.current);
-      scaleCount.current += SCALE_BATCH;
-      ensureDefaultRule();
-      store.importDocuments(sortByCreation(docs));
-      if (analysis) setAnalysis(analyseAll());
-      return `Added ${SCALE_BATCH} generated test events (${docs.length} CDMs) with invented values, to try the layout with many events. ${analysis ? "Risk analysis refreshed." : "Run the risk analysis to rate them."}`;
-    });
-
-  const runAnalysis = () =>
-    run(() => {
-      setAnalysis(analyseAll());
-      return store.getSnapshot().events.length ? "Risk analysis done: severity is shown for every event. Switch to the Specialist view for the full explanation." : "Nothing to analyse yet. Load data first.";
-    });
-
+  const loadData = () => session.loadData(() => setSelected(null));
+  const loadFiles = session.loadFiles;
+  const addTestEvents = session.addTestEvents;
+  const runAnalysis = session.runAnalysis;
   const reset = () =>
-    run(() => {
-      store.reset();
-      setAnalysis(null);
+    session.reset(() => {
       setSelected(null);
       setArchiveOverride({});
       setFilters(DEFAULT_FILTERS);
       setPage(1);
-      scaleCount.current = 0;
-      return "Reset. The table is empty.";
+      setReportOpen(false);
     });
 
   const updateFilters = (patch: Partial<RegisterFilters>) => {
@@ -211,6 +115,8 @@ export function CadsApp({ stepDelayMs = 900 }: { stepDelayMs?: number } = {}) {
             }}
           />
           <p aria-live="polite" className="console-status">{status}</p>
+          <button type="button" className="button button-tertiary" onClick={() => setReportOpen(true)} disabled={!importReport}>View import report</button>
+          <ImportReportSheet report={importReport} open={reportOpen} onOpenChange={setReportOpen} />
         </div>
 
         <section className="summary-grid" aria-label="Event summary">
@@ -331,6 +237,7 @@ export function CadsApp({ stepDelayMs = 900 }: { stepDelayMs?: number } = {}) {
           <>
             <EncounterPictureCard event={selectedEvent} />
             <CdmHistory event={selectedEvent} />
+            <OriginalCdm raw={latestRevision(selectedEvent).cdm.raw} />
             <ExplanationCard event={selectedEvent} analysis={analysis?.[selectedEvent.id]} now={now} />
             <CalculationDetails event={selectedEvent} />
           </>
