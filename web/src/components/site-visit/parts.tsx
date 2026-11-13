@@ -140,8 +140,7 @@ export function CriterionSection({ criterion, children }: { criterion: Criterion
 
       <div className="mb-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
         <div className="rounded-xl border border-sky-300/25 bg-sky-300/[0.06] p-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-sky-200">Excellent (100%) asks for</p>
-          <blockquote className="mt-2 text-pretty text-base leading-relaxed text-white">{criterion.excellent}</blockquote>
+          <blockquote className="text-pretty text-base leading-relaxed text-white">{criterion.excellent}</blockquote>
           {criterion.open.length ? (
             <div className="mt-4 border-t border-sky-200/15 pt-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-amber-100">Still open</p>
