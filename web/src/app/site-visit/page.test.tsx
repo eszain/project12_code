@@ -59,3 +59,8 @@ it("every diagram file exists and has a text description", () => {
     expect(d.alt.length).toBeGreaterThan(40);
   }
 });
+
+it("has a header button that switches the page between light and dark", () => {
+  render(<Page />);
+  expect(screen.getByRole("button", { name: /Switch to (light|dark) theme/ })).toBeTruthy();
+});
