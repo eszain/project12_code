@@ -137,13 +137,5 @@ export function useCadsSession({ stepDelayMs = 900 }: { stepDelayMs?: number } =
       return "Reset. The table is empty.";
     });
 
-<<<<<<< HEAD
   return { snap, analysis, status, busy, now, loadData, loadFiles, addTestEvents, runAnalysis, reset };
-=======
-  const createRule = (input: Omit<AlertRule, "id">) => store.addRule(input);
-  const updateRule = (id: number, input: Omit<AlertRule, "id">) => store.updateRule(id, input);
-  const deleteRule = (id: number) => store.deleteRule(id);
-
-  return { snap, analysis, status, importReport, busy, now, loadData, loadFiles, addTestEvents, runAnalysis, reset, createRule, updateRule, deleteRule };
->>>>>>> 2cf6b286f1c4515b2d0a1ab9383ef15e55b8db77
 }
