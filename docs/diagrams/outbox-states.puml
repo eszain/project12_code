@@ -1,0 +1,20 @@
+@startuml outbox-states
+!include _style.iuml
+title Notification outbox entry: delivery states (outbox.ts)
+[*] --> pending : alert occurrence enqueued
+[*] --> suppressed : enqueued while the event\nis muted or snoozed
+pending --> sent : delivery succeeds
+pending --> failed : delivery fails
+pending --> suppressed : event paused\nbefore delivery
+failed --> pending : operator presses Retry
+failed --> suppressed : Retry while\nthe event is paused
+sent --> [*]
+suppressed --> [*]
+note right of pending
+  Every transition adds a DeliveryLog
+  entry (time, status, detail).
+  Superseded alerts are never enqueued.
+  Delivery is a local simulation: no email,
+  SMS or webhook leaves the browser.
+end note
+@enduml
