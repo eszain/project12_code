@@ -1,3 +1,4 @@
+
 // In-memory event repository + alert evaluation (browser only; nothing is persisted or sent anywhere).
 // Port of cads/ingest.py and cads/alerts/rules.py. A page refresh or Reset clears everything.
 
@@ -53,7 +54,41 @@ export interface AlertOccurrence {
   severity: Severity;
   matched: string[];
   message: Record<string, unknown>;
+  ruleVersion?: number;
+  superseded?: boolean;
 }
+
+export interface RuleChange {
+  id: number;
+  createdAt: number;
+  action: "created" | "updated" | "deleted";
+  ruleId: number;
+  ruleName: string;
+  before: AlertRule | null;
+  after: AlertRule | null;
+}
+export interface NotificationPause {
+  eventId: number;
+  mode: "mute" | "snooze";
+  reason: string;
+  startedAt: number;
+  resumeAt: number | null;
+}
+
+export interface NotificationPauseChange {
+  id: number;
+  eventId: number;
+  action: "mute" | "snooze" | "resume" | "expire";
+  reason: string;
+  createdAt: number;
+  resumeAt: number | null;
+}
+
+/** A pause is effective only until its deadline. This is intentionally pure. */
+export function isNotificationPaused(pause: NotificationPause | undefined | null, now: number): boolean {
+  return Boolean(pause && (pause.resumeAt === null || pause.resumeAt > now));
+}
+
 export interface RecordOutcome {
   file: string;
   index: number;
@@ -71,6 +106,10 @@ export interface Snapshot {
   events: CdmEvent[];
   rules: AlertRule[];
   alerts: AlertOccurrence[];
+  ruleChanges?: RuleChange[];
+  ruleVersions?: Record<number, number>;
+  notificationPauses?: Record<number, NotificationPause>;
+  notificationPauseHistory?: NotificationPauseChange[];
 }
 
 export interface PersistedStoreState {
@@ -119,9 +158,15 @@ export class Store {
   private events: CdmEvent[] = [];
   private rules: AlertRule[] = [];
   private alerts: AlertOccurrence[] = [];
+  private ruleChanges: RuleChange[] = [];
+  private ruleVersions: Record<number, number> = {};
+  private nextChangeId = 1;
+  private notificationPauses: Record<number, NotificationPause> = {};
+  private notificationPauseHistory: NotificationPauseChange[] = [];
+  private nextPauseChangeId = 1;
   private ids = { event: 1, revision: 1, rule: 1, alert: 1 };
   private listeners = new Set<() => void>();
-  private snap: Snapshot = { events: [], rules: [], alerts: [] };
+  private snap: Snapshot = { events: [], rules: [], alerts: [], ruleChanges: [], ruleVersions: {}, notificationPauses: {}, notificationPauseHistory: [] };
 
   subscribe = (fn: () => void) => {
     this.listeners.add(fn);
@@ -130,7 +175,7 @@ export class Store {
   getSnapshot = () => this.snap;
 
   private commit() {
-    this.snap = { events: [...this.events], rules: [...this.rules], alerts: [...this.alerts] };
+    this.snap = { events: [...this.events], rules: [...this.rules], alerts: [...this.alerts], ruleChanges: [...this.ruleChanges], ruleVersions: { ...this.ruleVersions }, notificationPauses: { ...this.notificationPauses }, notificationPauseHistory: [...this.notificationPauseHistory] };
     this.listeners.forEach((l) => l());
   }
 
@@ -159,6 +204,12 @@ export class Store {
     this.events = restored.events;
     this.rules = restored.rules;
     this.alerts = restored.alerts;
+    this.ruleChanges = restored.ruleChanges ?? [];
+    this.ruleVersions = restored.ruleVersions ?? {};
+    this.notificationPauses = restored.notificationPauses ?? {};
+    this.notificationPauseHistory = restored.notificationPauseHistory ?? [];
+    this.nextPauseChangeId = Math.max(1, ...this.notificationPauseHistory.map((entry) => entry.id + 1));
+    this.nextChangeId = Math.max(1, ...this.ruleChanges.map((change) => change.id + 1));
 
     // Avoid reusing IDs already present in saved records.
     this.ids = {
@@ -193,15 +244,131 @@ export class Store {
     this.events = [];
     this.rules = [];
     this.alerts = [];
+    this.ruleChanges = [];
+    this.ruleVersions = {};
+    this.nextChangeId = 1;
+    this.notificationPauses = {};
+    this.notificationPauseHistory = [];
+    this.nextPauseChangeId = 1;
     this.ids = { event: 1, revision: 1, rule: 1, alert: 1 };
     this.commit();
   }
 
-  addRule(rule: Omit<AlertRule, "id">): AlertRule {
-    const r = { ...rule, id: this.ids.rule++ };
-    this.rules.push(r);
+  /** Pause notification presentation; risk evaluation and alert history are unaffected. */
+  pauseNotifications(eventId: number, mode: "mute" | "snooze", reason: string, resumeAt: number | null, at = Date.now()): void {
+    if (!this.events.some((event) => event.id === eventId)) throw new Error("Event not found.");
+    if (!reason.trim()) throw new Error("A reason is required.");
+    if (mode === "snooze" && (resumeAt === null || !Number.isFinite(resumeAt) || resumeAt <= at)) {
+      throw new Error("Choose a future resume time.");
+    }
+    if (mode === "mute" && resumeAt !== null) throw new Error("Mute cannot have a resume time.");
+    this.notificationPauses = {
+      ...this.notificationPauses,
+      [eventId]: { eventId, mode, reason: reason.trim(), startedAt: at, resumeAt },
+    };
+    this.notificationPauseHistory = [{
+      id: this.nextPauseChangeId++, eventId, action: mode,
+      reason: reason.trim(), createdAt: at, resumeAt,
+    }, ...this.notificationPauseHistory];
     this.commit();
-    return r;
+  }
+
+  resumeNotifications(eventId: number, at = Date.now()): void {
+    const current = this.notificationPauses[eventId];
+    if (!current) return;
+    const next = { ...this.notificationPauses };
+    delete next[eventId];
+    this.notificationPauses = next;
+    this.notificationPauseHistory = [{
+      id: this.nextPauseChangeId++, eventId, action: "resume",
+      reason: current.reason, createdAt: at, resumeAt: null,
+    }, ...this.notificationPauseHistory];
+    this.commit();
+  }
+
+  /** Expire snoozes on a clock tick without creating alerts or resending messages. */
+  expireSnoozes(at = Date.now()): void {
+    const expired = Object.values(this.notificationPauses).filter(
+      (pause) => pause.resumeAt !== null && pause.resumeAt <= at
+    );
+    if (expired.length === 0) return;
+    const next = { ...this.notificationPauses };
+    for (const pause of expired) {
+      delete next[pause.eventId];
+      this.notificationPauseHistory.unshift({
+        id: this.nextPauseChangeId++, eventId: pause.eventId, action: "expire",
+        reason: pause.reason, createdAt: at, resumeAt: pause.resumeAt,
+      });
+    }
+    this.notificationPauses = next;
+    this.commit();
+  }
+
+  private validateRule(input: Omit<AlertRule, "id">) {
+    if (!input.name.trim()) throw new Error("Rule name is required.");
+    for (const value of [input.pcMin, input.missDistanceMaxM, input.hoursToTcaMax]) {
+      if (value !== null && (!Number.isFinite(value) || value < 0)) {
+        throw new Error("Limits must be non-negative finite numbers.");
+      }
+    }
+    if (input.pcMin !== null && input.pcMin > 1) throw new Error("Pc cannot exceed 1.");
+    if (input.pcMin === null && input.missDistanceMaxM === null &&
+        input.hoursToTcaMax === null && !input.objectIds.some((id) => id.trim())) {
+      throw new Error("At least one condition is required.");
+    }
+  }
+
+  private recordChange(action: RuleChange["action"], before: AlertRule | null, after: AlertRule | null) {
+    const rule = after ?? before!;
+    this.ruleChanges.unshift({
+      id: this.nextChangeId++, createdAt: Date.now(), action,
+      ruleId: rule.id, ruleName: rule.name,
+      before: before ? structuredClone(before) : null,
+      after: after ? structuredClone(after) : null,
+    });
+  }
+
+  private reevaluateLatest() {
+    for (const event of this.events) this.evaluateAlerts(event, latestRevision(event));
+  }
+
+  addRule(input: Omit<AlertRule, "id">): AlertRule {
+    this.validateRule(input);
+    const rule = { ...structuredClone(input), name: input.name.trim(), id: this.ids.rule++ };
+    this.rules.push(rule);
+    this.ruleVersions[rule.id] = 1;
+    this.recordChange("created", null, rule);
+    this.reevaluateLatest();
+    this.commit();
+    return rule;
+  }
+
+  updateRule(id: number, input: Omit<AlertRule, "id">): AlertRule {
+    this.validateRule(input);
+    const index = this.rules.findIndex((rule) => rule.id === id);
+    if (index === -1) throw new Error("Rule not found.");
+    const before = structuredClone(this.rules[index]);
+    const updated = { ...structuredClone(input), name: input.name.trim(), id };
+    this.rules[index] = updated;
+    this.ruleVersions[id] = (this.ruleVersions[id] ?? 1) + 1;
+    this.alerts = this.alerts.map((alert) =>
+      alert.ruleId === id ? { ...alert, superseded: true } : alert
+    );
+    this.recordChange("updated", before, updated);
+    this.reevaluateLatest();
+    this.commit();
+    return updated;
+  }
+
+  deleteRule(id: number): void {
+    const before = this.rules.find((rule) => rule.id === id);
+    if (!before) throw new Error("Rule not found.");
+    this.rules = this.rules.filter((rule) => rule.id !== id);
+    this.alerts = this.alerts.map((alert) =>
+      alert.ruleId === id ? { ...alert, superseded: true } : alert
+    );
+    this.recordChange("deleted", before, null);
+    this.commit();
   }
 
   /** Parse, validate, de-duplicate, correlate and store; evaluate alert rules on the newest CDM of an event. */
@@ -285,6 +452,16 @@ export class Store {
           }
         }
 
+        const mergedPause = this.notificationPauses[other.id];
+        if (mergedPause) {
+          // Retain the more restrictive pause when two events merge.
+          const currentPause = this.notificationPauses[event.id];
+          if (!currentPause || currentPause.mode !== "mute" &&
+              (mergedPause.mode === "mute" || (mergedPause.resumeAt ?? 0) > (currentPause.resumeAt ?? 0))) {
+            this.notificationPauses[event.id] = { ...mergedPause, eventId: event.id };
+          }
+          delete this.notificationPauses[other.id];
+        }
         this.events = this.events.filter(
           (e) => e.id !== other.id
         );
@@ -329,13 +506,14 @@ export class Store {
     let created = 0;
     for (const rule of this.rules) {
       const { matches, reasons } = evaluateRule(rule, rev.cdm);
-      if (!matches || this.alerts.some((a) => a.ruleId === rule.id && a.revisionId === rev.id)) continue; // one alert per rule per CDM
+      if (!matches || this.alerts.some((a) => a.ruleId === rule.id && a.revisionId === rev.id && !a.superseded)) continue; // one alert per rule per CDM
       const c = rev.cdm;
       const severity = severityOf(c.pc);
       this.alerts.unshift({
         id: this.ids.alert++,
         createdAt: Date.now(),
         ruleId: rule.id,
+        ruleVersion: this.ruleVersions[rule.id] ?? 1,
         ruleName: rule.name,
         eventId: event.id,
         revisionId: rev.id,
