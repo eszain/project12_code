@@ -63,7 +63,13 @@ beforeAll(() => {
   vi.stubGlobal("ResizeObserver", Observer);
 });
 
-afterEach(cleanup);
+// A dashboard's queued saves can still land after it unmounts, so let them finish before the next test clears storage.
+// shortcut: fixed 200 ms wait; expose the save queue from useCadsSession if this ever proves too short.
+afterEach(async () => {
+  cleanup();
+  await new Promise((r) => setTimeout(r, 200));
+  await testPersistence.clear();
+});
 
 beforeAll(() => {
   vi.stubGlobal("fetch", async (url: string) => {

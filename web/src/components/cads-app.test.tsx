@@ -22,7 +22,13 @@ beforeAll(() => {
   vi.stubGlobal("IntersectionObserver", IO);
   vi.stubGlobal("fetch", async (url: string) => ({ json: async () => JSON.parse(readFileSync(join(__dirname, "../../public", url), "utf8")) }));
 });
-afterEach(cleanup);
+// A dashboard's queued saves can still land after it unmounts, so let them finish before the next test clears storage.
+// shortcut: fixed 200 ms wait; expose the save queue from useCadsSession if this ever proves too short.
+afterEach(async () => {
+  cleanup();
+  await new Promise((r) => setTimeout(r, 200));
+  await testPersistence.clear();
+});
 
 it("loads the CDMs one at a time, oldest first, counting them in the status line", async () => {
   const user = userEvent.setup();
@@ -54,9 +60,11 @@ it("starts empty, loads data, analyses with reasons, and resets", async () => {
   expect(screen.getByText(/Empty\. Press/)).toBeTruthy();
   expect(screen.getByRole("button", { name: /Run risk analysis/ })).toHaveProperty("disabled", true);
 
+  // Load is disabled until the saved session has been restored from IndexedDB.
+  await waitFor(() => expect(screen.getByRole("button", { name: /Load data/ })).toHaveProperty("disabled", false));
   await user.click(screen.getByRole("button", { name: /Load data/ }));
   const list = () => within(screen.getByRole("list", { name: "Event list" }));
-  await waitFor(() => expect(screen.getByText(/Loaded 9 CDMs one at a time/)).toBeTruthy()); // loading finished (analysis is disabled until then)
+  await waitFor(() => expect(screen.getByText(/Loaded 9 CDMs one at a time/)).toBeTruthy(), { timeout: 5000 }); // loading finished (analysis is disabled until then)
   expect(list().getAllByRole("listitem")).toHaveLength(3); // 3 events
   expect(screen.getAllByText("run risk analysis")).toHaveLength(3); // severity not shown yet
   expect(list().queryByText("ACTION")).toBeNull();
@@ -114,8 +122,9 @@ it("starts empty, loads data, analyses with reasons, and resets", async () => {
 it("archives and restores events, and filters by search and severity after the analysis", async () => {
   const user = userEvent.setup();
   render(<CadsApp stepDelayMs={0} />);
+  await waitFor(() => expect(screen.getByRole("button", { name: /Load data/ })).toHaveProperty("disabled", false));
   await user.click(screen.getByRole("button", { name: /Load data/ }));
-  await waitFor(() => expect(screen.getByText(/Loaded 9 CDMs one at a time/)).toBeTruthy());
+  await waitFor(() => expect(screen.getByText(/Loaded 9 CDMs one at a time/)).toBeTruthy(), { timeout: 5000 });
   const list = () => within(screen.getByRole("list", { name: "Event list" }));
   expect(list().getAllByRole("listitem")).toHaveLength(3);
 
