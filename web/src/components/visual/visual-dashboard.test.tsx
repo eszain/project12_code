@@ -1,4 +1,3 @@
-
 // @vitest-environment jsdom
 
 import {
@@ -9,6 +8,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -60,8 +60,8 @@ beforeAll(() => {
   });
 });
 
-it("renders the dashboard with a notifications trigger and rule editor", () => {
-  render(<VisualDashboard />);
+it("renders the left sidebar, the player and the event details sidebar", () => {
+  render(<VisualDashboard stepDelayMs={0} />);
 
   expect(
     screen.getByLabelText("Data and events")
@@ -76,23 +76,11 @@ it("renders the dashboard with a notifications trigger and rule editor", () => {
       name: "Conjunction player",
     })
   ).toBeTruthy();
-
-  expect(
-    screen.getByRole("button", {
-      name: /Notifications/,
-    })
-  ).toBeTruthy();
-
-  expect(
-    screen.getByRole("button", {
-      name: /Alert rules/,
-    })
-  ).toBeTruthy();
 });
 
 it("loads the sample events, selects a row, and switches the detail view", async () => {
   const user = userEvent.setup();
-  render(<VisualDashboard />);
+  render(<VisualDashboard stepDelayMs={0} />);
 
   await user.click(screen.getByRole("button", { name: /Load sample data/ }));
   const rows = await screen.findAllByRole("button", { name: /Select .*Severity/ });
@@ -117,7 +105,7 @@ it("loads the sample events, selects a row, and switches the detail view", async
 
 it("supports keyboard event selection and detail-view switching", async () => {
   const user = userEvent.setup();
-  render(<VisualDashboard />);
+  render(<VisualDashboard stepDelayMs={0} />);
 
   const loadButton = screen.getByRole("button", { name: /Load sample data/ });
   await user.click(loadButton);
@@ -152,4 +140,36 @@ it("supports keyboard event selection and detail-view switching", async () => {
   await waitFor(() => expect(specialist.getAttribute("aria-pressed")).toBe("true"));
   fireEvent.keyDown(fullDetails, { key: " ", code: "Space" });
   expect(specialist.getAttribute("aria-pressed")).toBe("true");
+});
+
+const upload = (name: string, file: string) =>
+  new File([readFileSync(path.join(process.cwd(), file), "utf8")], name, { type: "application/json" });
+
+it("shows which uploaded files were accepted and why others were not", async () => {
+  const user = userEvent.setup();
+  render(<VisualDashboard stepDelayMs={0} />);
+  await user.upload(screen.getByLabelText("Choose CDM files (JSON or KVN)"), [
+    upload("mine.json", "public/fixtures/synthetic/synthetic_high_risk_3.json"),
+    upload("missing_tca.json", "../data/fixtures/invalid/missing_tca.json"),
+  ]);
+  await waitFor(() => expect(screen.getByText(/1 rejected/)).toBeTruthy());
+  await user.click(screen.getByRole("button", { name: /View import report/ }));
+  expect(screen.getByText("mine.json")).toBeTruthy();
+  expect(screen.getByText("missing_tca.json")).toBeTruthy();
+  expect(screen.getByText("Accepted")).toBeTruthy();
+  expect(screen.getByText("Rejected")).toBeTruthy();
+  expect(screen.getByText("TCA is missing.")).toBeTruthy();
+});
+
+it("shows the stored CDM fields unchanged in the specialist view", async () => {
+  const user = userEvent.setup();
+  render(<VisualDashboard stepDelayMs={0} />);
+  await user.upload(screen.getByLabelText("Choose CDM files (JSON or KVN)"), upload("mine.json", "public/fixtures/synthetic/synthetic_high_risk_3.json"));
+  const [row] = await screen.findAllByRole("button", { name: /Select .*Severity/ });
+  await user.click(row);
+  await user.click(screen.getByRole("button", { name: "Specialist" }));
+  await user.click(screen.getByRole("button", { name: "View original CDM" }));
+  const raw = screen.getByLabelText("Original CDM fields").textContent ?? "";
+  expect(raw).toContain("COLLISION_PROBABILITY");
+  expect(raw).toContain("3.888786E-04");
 });

@@ -41,12 +41,44 @@ describe("ingestion and correlation (AC01, AC02)", () => {
     expect(raw).toEqual(["1.009416E-06", "2.885737E-08", "7.665263E-09", "0", "7.854690E-07", "0"]);
     expect(c["cdm_set_4.json"].pc).toBe(0);
   });
-  it("rejects every invalid fixture with a reason", () => {
+  it("rejects every invalid fixture with a plain reason", () => {
+    const reasons: Record<string, string> = {
+      "missing_tca.json": "TCA is missing.",
+      "bad_timestamp.json": "Creation date is not a valid time.",
+      "identical_objects.json": "Both objects are the same.",
+      "not_a_cdm.txt": "This file is not a conjunction message.",
+      "pc_out_of_range.json": "Collision probability must be between 0 and 1.",
+      "truncated.json": "This file is cut off and is not valid JSON.",
+    };
     for (const f of readdirSync(join(DATA, "invalid"))) {
       const res = parseDocument(read("invalid", f), f);
       expect(res.some((r) => r.cdm), f).toBe(false);
-      expect(res.every((r) => r.errors.length > 0), f).toBe(true);
+      expect(res[0].errors, f).toContain(reasons[f]);
+      expect(res[0].errors.join(" "), f).not.toMatch(/SyntaxError|at /);
     }
+  });
+  it("reports which files were accepted, repeated and rejected", () => {
+    const s = new Store();
+    const good = { name: "ok.json", content: read("synthetic", "synthetic_high_risk_1.json"), label: "uploaded" };
+    const bad = { name: "missing_tca.json", content: read("invalid", "missing_tca.json"), label: "uploaded" };
+    const report = s.importDocuments([good, bad, good]);
+    expect(report.counts).toEqual({ imported: 1, duplicate: 1, rejected: 1 });
+    expect(report.records.find((r) => r.status === "rejected")?.errors).toContain("TCA is missing.");
+    expect(report.records.find((r) => r.status === "imported")?.file).toBe("ok.json");
+  });
+  it("keeps the stored raw fields unchanged, including a source Pc of zero", () => {
+    const text = read("reconstructed", "cdm_set_1.json");
+    const c = parseDocument(text, "cdm_set_1.json")[0].cdm!;
+    const source = JSON.parse(text) as Record<string, unknown>;
+    const flat: Record<string, string> = {};
+    for (const [k, v] of Object.entries(source)) if (v !== null && typeof v !== "object") flat[k] = String(v);
+    expect(c.raw).toEqual(flat);
+    expect(c.raw.COLLISION_PROBABILITY).toBe("1.009416E-06");
+    expect(c.pcRaw).toBe(c.raw.COLLISION_PROBABILITY);
+    const zero = cdm("reconstructed", "cdm_set_4.json");
+    expect(zero.pc).toBe(0);
+    expect(zero.raw.COLLISION_PROBABILITY).toBe("0");
+    expect(zero.pcRaw).not.toBeNull();
   });
   it("KVN adapter gives the same values as JSON", () => {
     const k = parseDocument(read("kvn", "synthetic_high_risk_3.kvn"))[0].cdm!;
@@ -86,7 +118,7 @@ describe("store, alerts and analysis (AC03)", () => {
     expect(s.importDocuments(docs("reconstructed")).counts.duplicate).toBe(6);
     expect(s.getSnapshot().alerts).toHaveLength(2);
     s.reset();
-    expect(s.getSnapshot()).toEqual({events: [], rules: [], alerts: [], deliveries: [], audit: [], suppressions: []});
+    expect(s.getSnapshot()).toEqual({ events: [], rules: [], alerts: [] });
   });
   it("demo scenario is re-dated to upcoming encounters and the analysis explains each event", async () => {
     const now = Date.now();

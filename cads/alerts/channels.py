@@ -67,30 +67,16 @@ def render_text(message: dict) -> str:
 
 
 def send(channel_type: str, target: str, message: dict, settings: Settings) -> None:
-    if settings.demo_safe_delivery and channel_type in {
-        "email",
-        "webhook"
-    }:
-        raise ChannelError(
-            "external delivery blocked in demo-safe mode"
-        )
-
     if channel_type == "file":
         _send_file(target, message, settings)
-
     elif channel_type == "log":
         log.warning("%s", render_text(message))
-
     elif channel_type == "webhook":
         _send_webhook(target, message)
-
     elif channel_type == "email":
         _send_email(target, message, settings)
-
     else:
-        raise ChannelError(
-            f"unknown channel type {channel_type!r}"
-        )
+        raise ChannelError(f"unknown channel type {channel_type!r}")
 
 
 def _send_file(target: str, message: dict, settings: Settings) -> None:
