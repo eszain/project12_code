@@ -8,7 +8,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { analyzeEvent, type EventAnalysis } from "@/lib/cads/analyze";
 import { loadDemoDocuments, loadScaleDocuments, sortByCreation } from "@/lib/cads/demo";
-import { CONFIG, Store, type AlertRule, type ImportReport, type RecordOutcome, type Snapshot } from "@/lib/cads/store";
+import { CONFIG, Store, type Snapshot } from "@/lib/cads/store";
 
 const EMPTY: Snapshot = { events: [], rules: [], alerts: [] };
 export const SCALE_BATCH = 60;
@@ -24,7 +24,6 @@ export function useCadsSession({ stepDelayMs = 900 }: { stepDelayMs?: number } =
   const [busy, setBusy] = useState(false);
   // "Now" lives in state (refreshed by every action) because reading the clock during render is not allowed here.
   const [now, setNow] = useState(0);
-  const [importReport, setImportReport] = useState<ImportReport | null>(null);
   const scaleCount = useRef(0);
   const alive = useRef(true);
   useEffect(() => {
@@ -62,10 +61,7 @@ export function useCadsSession({ stepDelayMs = 900 }: { stepDelayMs?: number } =
     ensureDefaultRule();
     const ordered = sortByCreation(docs);
     const total = { imported: 0, duplicate: 0, rejected: 0 };
-    const records: RecordOutcome[] = [];
-    // The nine-file demo pauses between messages. Larger loads stay in the same order
-    // but yield every batch so the status line can update without a long pause.
-    const pauseEach = ordered.length <= 12;
+    const problems: string[] = [];
     for (let i = 0; i < ordered.length; i++) {
       if (!alive.current) return "Loading stopped.";
       setNow(Date.now());
@@ -74,17 +70,11 @@ export function useCadsSession({ stepDelayMs = 900 }: { stepDelayMs?: number } =
       total.imported += r.counts.imported;
       total.duplicate += r.counts.duplicate;
       total.rejected += r.counts.rejected;
-      records.push(...r.records);
-      if (i < ordered.length - 1) {
-        if (pauseEach) {
-          if (stepDelayMs > 0) await sleep(stepDelayMs);
-        } else if ((i + 1) % 20 === 0) {
-          await sleep(0);
-        }
-      }
+      r.records.filter((x) => x.status === "rejected").forEach((x) => problems.push(`${x.file}: ${x.errors[0] ?? "rejected"}`));
+      if (i < ordered.length - 1) await sleep(stepDelayMs);
     }
-    setImportReport({ records, counts: total });
-    return `Loaded ${total.imported} CDMs one at a time, oldest first (${total.duplicate} repeats, ${total.rejected} rejected). ${intro}`;
+    const rejected = total.rejected ? ` ${total.rejected} rejected (${problems.slice(0, 2).join("; ")}${problems.length > 2 ? "; …" : ""}).` : "";
+    return `Loaded ${total.imported} CDMs one at a time, oldest first (${total.duplicate} repeats ignored).${rejected} ${intro}`;
   };
 
   /** Load the bundled sample CDMs. `before` runs first (for example to clear the page's selection). */
@@ -111,13 +101,10 @@ export function useCadsSession({ stepDelayMs = 900 }: { stepDelayMs?: number } =
     run(async () => {
       const docs = await loadScaleDocuments(SCALE_BATCH, scaleCount.current);
       scaleCount.current += SCALE_BATCH;
-      const hadAnalysis = analysis !== null;
-      const summary = await feedDocuments(
-        docs,
-        `Added ${SCALE_BATCH} generated test events (${docs.length} CDMs) with invented values, to try the layout with many events. ${hadAnalysis ? "Risk analysis refreshed." : "Run the risk analysis to rate them."}`,
-      );
-      if (hadAnalysis) setAnalysis(analyseAll());
-      return summary;
+      ensureDefaultRule();
+      store.importDocuments(sortByCreation(docs));
+      if (analysis) setAnalysis(analyseAll());
+      return `Added ${SCALE_BATCH} generated test events (${docs.length} CDMs) with invented values, to try the layout with many events. ${analysis ? "Risk analysis refreshed." : "Run the risk analysis to rate them."}`;
     });
 
   const runAnalysis = () =>
@@ -131,7 +118,6 @@ export function useCadsSession({ stepDelayMs = 900 }: { stepDelayMs?: number } =
     run(() => {
       store.reset();
       setAnalysis(null);
-      setImportReport(null);
       scaleCount.current = 0;
       after?.();
       return "Reset. The table is empty.";
