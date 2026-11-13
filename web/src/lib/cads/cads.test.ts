@@ -239,7 +239,7 @@ it("keeps the same event groups when CDMs arrive in any order", () => {
     expect(s.importDocuments(docs("reconstructed")).counts.duplicate).toBe(6);
     expect(s.getSnapshot().alerts).toHaveLength(2);
     s.reset();
-    expect(s.getSnapshot()).toEqual({ events: [], rules: [], alerts: [] });
+    expect(s.getSnapshot()).toEqual({events: [], rules: [], alerts: [], deliveries: [], audit: [], suppressions: []});
   });
   it("demo scenario is re-dated to upcoming encounters and the analysis explains each event", async () => {
     const now = Date.now();
