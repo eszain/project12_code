@@ -9,7 +9,7 @@ const fmtM = (m: number) => (m >= 10000 ? `${(m / 1000).toFixed(1)} km` : `${m.t
 const CONFIDENCE_LABEL: Record<Confidence, string> = { high: "High confidence", moderate: "Moderate confidence", low: "Low confidence" };
 
 /** A4: one short block comparing the miss distance with the uncertainty, shown on specialist cards. */
-export function MissVsUncertaintyBlock({ cdm }: { cdm: NormalizedCdm }) {
+export function MissVsUncertaintyBlock({ cdm, cautiousLanguage = false }: { cdm: NormalizedCdm; cautiousLanguage?: boolean }) {
   const m = missVsUncertainty(cdm);
   return (
     <div className="ops-block">
@@ -19,7 +19,7 @@ export function MissVsUncertaintyBlock({ cdm }: { cdm: NormalizedCdm }) {
           <div className="ops-row">
             <span className={`confidence confidence-${m.confidence}`}>{CONFIDENCE_LABEL[m.confidence]}</span> · miss is {m.ratio >= 10 ? m.ratio.toFixed(0) : m.ratio.toFixed(1)}× the uncertainty
           </div>
-          <div className="ops-row ops-row-label">{m.sentence}</div>
+          <div className="ops-row ops-row-label">{cautiousLanguage ? `This is a geometric comparison with 1σ positional uncertainty, not a collision probability or safety guarantee. ${m.confidence === "high" ? "Continue to verify against the reported Pc and later CDMs." : "The uncertainty remains material, so review the reported Pc and later CDMs."}` : m.sentence}</div>
         </>
       ) : (
         <div className="ops-row ops-row-label">Not available: {m.reason}</div>
@@ -44,7 +44,7 @@ function CovarianceTable({ label, m }: { label: string; m: number[][] }) {
 }
 
 /** A5: how the numbers for the selected event were calculated, in four plain steps. Kept off the main page. */
-export function CalculationDetails({ event }: { event: CdmEvent }) {
+export function CalculationDetails({ event, cautiousLanguage = false }: { event: CdmEvent; cautiousLanguage?: boolean }) {
   const cdm = latestRevision(event).cdm;
   const d = calculationDetails(cdm);
   const r = d.recalculation;
@@ -87,7 +87,7 @@ export function CalculationDetails({ event }: { event: CdmEvent }) {
         <>
           <p>
             Putting both clouds together and looking along the direction of the miss: miss {fmtM(d.missVsUncertainty.missPlaneM)}, combined uncertainty {fmtM(d.missVsUncertainty.sigmaAlongMissM)}, which is{" "}
-            <strong>{d.missVsUncertainty.ratio.toFixed(2)}×</strong>. {d.missVsUncertainty.sentence}
+            <strong>{d.missVsUncertainty.ratio.toFixed(2)}×</strong>. {cautiousLanguage ? "This ratio describes separation relative to the positional uncertainty; it is not a collision probability or a guarantee of safety." : d.missVsUncertainty.sentence}
           </p>
           <p className="panel-note">Reading aid: 3× or more is high confidence, 1× to 3× moderate, below 1× low. These cut-offs are ours, not CSA limits.</p>
         </>
@@ -99,7 +99,7 @@ export function CalculationDetails({ event }: { event: CdmEvent }) {
       {r.available ? (
         <>
           <p>
-            CADS recomputes the collision chance from the same positions and uncertainties: {formatOdds(r.recalculatedPc)} (<code>{r.recalculatedPc.toExponential(3)}</code>), against the CDM&apos;s <code>{d.source.pcRaw ?? "n/a"}</code>.
+            {cautiousLanguage ? "CADS performs an experimental internal check from the same positions and uncertainties: " : "CADS recomputes the collision chance from the same positions and uncertainties: "}{formatOdds(r.recalculatedPc)} (<code>{r.recalculatedPc.toExponential(3)}</code>), against the CDM&apos;s {cautiousLanguage ? "reported " : ""}<code>{d.source.pcRaw ?? "n/a"}</code>.
             {r.ratioToSource !== null && ` Our value is ${r.ratioToSource.toFixed(2)}× the source value.`}
           </p>
           <ul className="calc-list">

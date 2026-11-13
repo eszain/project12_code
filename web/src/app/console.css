@@ -182,3 +182,33 @@ h3.ops-title { cursor: default; }
 .cads-inset { background: transparent; min-width: 0; }
 .cads-inner { min-height: 100svh; }
 .cads-centre { flex: 1 1 auto; min-width: 0; }
+
+/* Compact event rows for the visual dashboard side rail. */
+.cads-event-row { min-width: 0; padding-right: 3.5rem; }
+.cads-event-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cads-severity-dot { border-radius: 999px; flex: 0 0 auto; height: .55rem; width: .55rem; }
+.cads-severity-action { background: #ff6a4c; box-shadow: 0 0 8px rgba(255, 106, 76, .65); }
+.cads-severity-watch { background: #ffc56e; }
+.cads-severity-low, .cads-severity-zero { background: #59d8b0; }
+.cads-severity-unknown { background: #9bcbe5; }
+.cads-sidebar-status { color: #9cb5ca; font-size: .68rem; line-height: 1.45; margin: .35rem .5rem 0; }
+.cads-sidebar-state { color: #9cb5ca; font-size: .75rem; line-height: 1.5; padding: .5rem; }
+.cads-player-empty { align-items: center; border: 1px dashed rgba(151, 218, 255, .2); color: #9cb5ca; display: flex; justify-content: center; min-height: 55vh; text-align: center; }
+.cads-details-content { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; padding: 1rem; }
+.cads-details-header { align-items: start; display: flex; gap: .75rem; justify-content: space-between; }
+.cads-details-header h2 { overflow-wrap: anywhere; }
+.cads-details-scroll { flex: 1 1 auto; min-height: 0; min-width: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; padding: 0 .15rem 2rem 0; scrollbar-gutter: stable; }
+.cads-details-scroll > .ops-card { align-content: start; border-radius: .5rem; gap: 14px; height: auto; padding: .75rem; }
+.cads-details-scroll .ops-metrics { gap: .5rem; grid-template-columns: 1fr; }
+.cads-details-scroll > .ops-card .ops-metrics > div { grid-template-rows: auto; }
+.cads-details-scroll > .ops-card .ops-links { justify-content: flex-start; }
+.cads-details-scroll .ops-panel { margin-top: 1rem; }
+.cads-details-scroll .ops-charts { grid-template-columns: 1fr; }
+.cads-details-scroll .dashboard-table-wrap { overflow-x: auto; }
+.cads-details-scroll .ops-explain h2 { font-size: 1rem; }
+.cads-details-scroll .ops-panel { min-width: 0; overflow: visible; }
+.cads-details-scroll .dashboard-table-wrap { max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; }
+.cads-details-scroll .ops-history-table { min-width: 700px; }
+.cads-details-scroll .ops-charts figure { min-width: 0; overflow: hidden; }
+.cads-details-scroll .katex-display { max-width: 100%; overflow-x: auto; overflow-y: hidden; padding-bottom: .25rem; }
+.cads-details-scroll .calc-panel p, .cads-details-scroll .calc-panel li { overflow-wrap: anywhere; }
