@@ -13,9 +13,14 @@ export interface EventAnalysis {
   why: string[];
 }
 
+// A CDM Pc of exactly 0 means the source rounded a very small chance down, not that a collision is impossible:
+// the positions are uncertain, so the true chance is never zero (CSA, Nov 6). Show it as below 1 in a billion,
+// the same floor used for any very small Pc. Severity still treats a source 0 as its own band.
+export const ZERO_PC_PERCENT = "less than 0.0000001%";
+
 export function formatOdds(pc: number | null | undefined): string {
   if (pc === null || pc === undefined) return "not provided";
-  if (pc === 0) return "0% (zero chance of collision)";
+  if (pc === 0) return `${ZERO_PC_PERCENT} (reported as 0 in the CDM)`;
   if (pc >= 1) return "100% (guaranteed collision)";
   const oneInN = Math.round(1 / pc);
   const pct = pc * 100;
@@ -36,7 +41,7 @@ export function formatOdds(pc: number | null | undefined): string {
 
 export function formatShortOdds(pc: number | null | undefined): string {
   if (pc === null || pc === undefined) return "n/a";
-  if (pc === 0) return "0%";
+  if (pc === 0) return "< 0.0000001%";
   if (pc >= 1) return "100%";
   const oneInN = Math.round(1 / pc);
   if (oneInN >= 1_000_000_000) return "< 1 in 1B";
@@ -62,7 +67,7 @@ export function phoneSummary(cdm: NormalizedCdm, nowMs: number): string {
   const name = (o: NormalizedCdm["sat1"]) => (o.objectType?.toUpperCase().includes("DEBRIS") ? `${o.name ?? o.designator} (debris)` : (o.name ?? o.designator));
   const h = (cdm.tca - nowMs) / 3600000;
   const when = h >= 0 ? `closest approach in ${h.toFixed(1)} hours` : `closest approach was ${(-h).toFixed(1)} hours ago`;
-  const pc = cdm.pc === null ? "collision chance not provided" : cdm.pc === 0 ? "collision chance 0%" : `collision chance ${formatShortOdds(cdm.pc)}`;
+  const pc = cdm.pc === null ? "collision chance not provided" : `collision chance ${formatShortOdds(cdm.pc)}`;
   return `${name(cdm.sat1)} and ${name(cdm.sat2)}: ${when}, ${pc}.`;
 }
 
@@ -107,7 +112,7 @@ export function analyzeEvent(event: CdmEvent, nowMs: number): EventAnalysis {
     );
   } else if (pc === 0) {
     why.push(
-      "Severity: ZERO — Completely Clear. Latest CDM reports Pc exactly 0 (0% collision risk): the space tracking network sees zero chance of collision. Both objects' flight paths are completely separate, so no maneuver or action is needed."
+      `Severity: ZERO — Clear. Latest CDM reports Pc exactly 0, which means a chance ${ZERO_PC_PERCENT}: far too small to report, though never truly zero because the positions are uncertain. No maneuver or action is needed.`
     );
   } else {
     why.push(
@@ -119,7 +124,7 @@ export function analyzeEvent(event: CdmEvent, nowMs: number): EventAnalysis {
   const distDesc = formatDistance(cdm.missDistanceM);
   if (pc === 0) {
     why.push(
-      `The Math in Simple Terms: Ground radar cannot pinpoint satellites down to the millimeter from Earth, so every satellite has an "uncertainty cloud" (safety bubble) around it. The math checks if these bubbles overlap during the flyby. At ${distDesc} apart, the bubbles have 0% overlap, meaning mathematically zero chance of touching.`
+      `The Math in Simple Terms: Ground radar cannot pinpoint satellites down to the millimeter from Earth, so every satellite has an "uncertainty cloud" (safety bubble) around it. The math checks if these bubbles overlap during the flyby. At ${distDesc} apart, the bubbles barely overlap, so the chance of touching is ${ZERO_PC_PERCENT}.`
     );
   } else if (pc !== null && pc >= CONFIG.pcAction) {
     why.push(

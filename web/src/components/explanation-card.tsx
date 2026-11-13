@@ -1,7 +1,7 @@
 "use client";
 
 import { Latex } from "@/components/latex";
-import { formatDistance, formatOdds, formatSpeed, type EventAnalysis } from "@/lib/cads/analyze";
+import { ZERO_PC_PERCENT, formatDistance, formatOdds, formatSpeed, type EventAnalysis } from "@/lib/cads/analyze";
 import { latestRevision, type CdmEvent } from "@/lib/cads/store";
 import { SeverityBadge } from "./severity-badge";
 import { hoursBetween } from "@/lib/cads/time";
@@ -27,7 +27,7 @@ export function ExplanationCard({
   const timingText = hours >= 0 ? `in ${hours.toFixed(1)} hours` : `passed ${(-hours).toFixed(1)} hours ago`;
 
   const oneInN = pc && pc > 0 ? Math.round(1 / pc) : null;
-  const pctStr = pc && pc > 0 ? (pc * 100 < 0.01 ? (pc * 100).toFixed(3) : (pc * 100).toFixed(2)) + "%" : "0%";
+  const pctStr = pc && pc > 0 ? (pc * 100 < 0.01 ? (pc * 100).toFixed(3) : (pc * 100).toFixed(2)) + "%" : ZERO_PC_PERCENT;
 
   return (
     <section className="detail-panel ops-panel ops-explain" aria-labelledby="explanation-heading">
@@ -78,9 +78,9 @@ export function ExplanationCard({
                 {analysis.severity === "ZERO" && (
                   <>
                     {cautiousLanguage ? (
-                      <><strong>Reported Pc is zero.</strong> This CDM reports a collision probability of <strong>0%</strong>. That source value is not a guarantee; review positional uncertainty and later updates.</>
+                      <><strong>Reported Pc is zero.</strong> This CDM reports a collision probability of 0, which means <strong>{ZERO_PC_PERCENT}</strong>. That source value is not a guarantee; review positional uncertainty and later updates.</>
                     ) : (
-                      <><strong>Zero Risk.</strong> The probability of collision is <strong>0%</strong>. Both satellites are safely apart, with no danger of touching.</>
+                      <><strong>Practically no risk.</strong> The probability of collision is <strong>{ZERO_PC_PERCENT}</strong>. Both satellites are safely apart.</>
                     )}
                   </>
                 )}
@@ -135,7 +135,7 @@ export function ExplanationCard({
                   <div className="text-[11px] text-muted-foreground font-medium">2. Collision Odds (Pc)</div>
                   <div className="text-sm font-semibold text-foreground py-0.5">
                     {pc === 0 ? (
-                      <Latex math="P_c = 0\%" />
+                      <Latex math="P_c < 10^{-9}" />
                     ) : (
                       <Latex math={`P_c = \\frac{1}{${oneInN?.toLocaleString()}}`} />
                     )}
@@ -169,10 +169,10 @@ export function ExplanationCard({
                   <div className="space-y-1.5">
                     <Latex
                       block
-                      math={`d = ${missM.toFixed(0)}\\text{ m} \\gg 10\\text{ m} \\implies P_c = 0\\% \\implies \\textbf{${cautiousLanguage ? "REPORTED Pc = 0" : "ZERO RISK"}}`}
+                      math={`d = ${missM.toFixed(0)}\\text{ m} \\gg 10\\text{ m} \\implies P_c < 10^{-9} \\implies \\textbf{${cautiousLanguage ? "REPORTED Pc = 0" : "PRACTICALLY NO RISK"}}`}
                     />
                     <p className="text-[11px] text-muted-foreground">
-                      {cautiousLanguage ? `The distance (${missM.toFixed(0)} meters) is compared with object size in this reading aid. The source Pc is 0% for this update; that does not replace uncertainty review.` : `The distance (${missM.toFixed(0)} meters) is hundreds of times larger than the satellites. Probability is 0%, so no move is needed.`}
+                      {cautiousLanguage ? `The distance (${missM.toFixed(0)} meters) is compared with object size in this reading aid. The source Pc is 0 for this update, which means ${ZERO_PC_PERCENT}; that does not replace uncertainty review.` : `The distance (${missM.toFixed(0)} meters) is hundreds of times larger than the satellites. The chance is ${ZERO_PC_PERCENT}, so no move is needed.`}
                     </p>
                   </div>
                 )}
