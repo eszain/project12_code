@@ -10,10 +10,12 @@ export function ExplanationCard({
   event,
   analysis,
   now,
+  cautiousLanguage = false,
 }: {
   event: CdmEvent;
   analysis?: EventAnalysis;
   now: number;
+  cautiousLanguage?: boolean;
 }) {
   const latest = latestRevision(event).cdm;
   const sat1Label = latest.sat1.name ?? latest.sat1.designator;
@@ -57,22 +59,38 @@ export function ExplanationCard({
               <p className="text-muted-foreground leading-relaxed">
                 {analysis.severity === "ACTION" && (
                   <>
-                    <strong>High Danger.</strong> The chance of these two objects crashing is <strong>{formatOdds(pc)}</strong>. In space flight, any chance worse than <strong>1 in 10,000</strong> is unacceptable risk. Operators must plan a steering burn to dodge it.
+                    {cautiousLanguage ? (
+                      <><strong>Action-band Pc.</strong> The reported collision probability is <strong>{formatOdds(pc)}</strong>. It meets the <strong>1 in 10,000</strong> action level and requires specialist review; CADS does not command a maneuver.</>
+                    ) : (
+                      <><strong>High Danger.</strong> The chance of these two objects crashing is <strong>{formatOdds(pc)}</strong>. In space flight, any chance worse than <strong>1 in 10,000</strong> is unacceptable risk. Operators must plan a steering burn to dodge it.</>
+                    )}
                   </>
                 )}
                 {analysis.severity === "WATCH" && (
                   <>
-                    <strong>Elevated Watch.</strong> The collision chance is <strong>{formatOdds(pc)}</strong> (between 1 in 10,000 and 1 in 10 million). It is safe for now, but operators must keep watching future radar updates.
+                    {cautiousLanguage ? (
+                      <><strong>Elevated Watch.</strong> The reported collision probability is <strong>{formatOdds(pc)}</strong> (between 1 in 10,000 and 1 in 10 million). Continue monitoring; this value alone is not a safety guarantee or maneuver decision.</>
+                    ) : (
+                      <><strong>Elevated Watch.</strong> The collision chance is <strong>{formatOdds(pc)}</strong> (between 1 in 10,000 and 1 in 10 million). It is safe for now, but operators must keep watching future radar updates.</>
+                    )}
                   </>
                 )}
                 {analysis.severity === "ZERO" && (
                   <>
-                    <strong>Zero Risk.</strong> The probability of collision is <strong>0%</strong>. Both satellites are safely apart, with no danger of touching.
+                    {cautiousLanguage ? (
+                      <><strong>Reported Pc is zero.</strong> This CDM reports a collision probability of <strong>0%</strong>. That source value is not a guarantee; review positional uncertainty and later updates.</>
+                    ) : (
+                      <><strong>Zero Risk.</strong> The probability of collision is <strong>0%</strong>. Both satellites are safely apart, with no danger of touching.</>
+                    )}
                   </>
                 )}
                 {analysis.severity === "LOW" && (
                   <>
-                    <strong>Safe Pass.</strong> The collision chance is <strong>{formatOdds(pc)}</strong> (less than 1 in 10 million). The risk is negligible.
+                    {cautiousLanguage ? (
+                      <><strong>Low reported Pc.</strong> The reported collision probability is <strong>{formatOdds(pc)}</strong> (less than 1 in 10 million). Treat it as a low reported value, not a guarantee of a safe pass.</>
+                    ) : (
+                      <><strong>Safe Pass.</strong> The collision chance is <strong>{formatOdds(pc)}</strong> (less than 1 in 10 million). The risk is negligible.</>
+                    )}
                   </>
                 )}
                 {analysis.severity === "UNKNOWN" && (
@@ -140,10 +158,10 @@ export function ExplanationCard({
                   <div className="space-y-1.5">
                     <Latex
                       block
-                      math={`\\text{Our Risk: } \\frac{1}{${oneInN?.toLocaleString()}} \\quad > \\quad \\text{Safety Limit: } \\frac{1}{10{,}000} \\implies \\textbf{ACTION REQUIRED}`}
+                      math={`\\text{${cautiousLanguage ? "Reported Pc" : "Our Risk"}: } \\frac{1}{${oneInN?.toLocaleString()}} \\quad > \\quad \\text{${cautiousLanguage ? "Action Level" : "Safety Limit"}: } \\frac{1}{10{,}000} \\implies \\textbf{${cautiousLanguage ? "SPECIALIST REVIEW" : "ACTION REQUIRED"}}`}
                     />
                     <p className="text-[11px] text-muted-foreground">
-                      Because 1 in {oneInN?.toLocaleString()} is a higher risk than the 1 in 10,000 safety threshold, operators must maneuver.
+                      {cautiousLanguage ? "The reported Pc is above the action level; a specialist must review the CDM and operational context before any decision." : `Because 1 in ${oneInN?.toLocaleString()} is a higher risk than the 1 in 10,000 safety threshold, operators must maneuver.`}
                     </p>
                   </div>
                 )}
@@ -151,10 +169,10 @@ export function ExplanationCard({
                   <div className="space-y-1.5">
                     <Latex
                       block
-                      math={`d = ${missM.toFixed(0)}\\text{ m} \\gg 10\\text{ m} \\implies P_c = 0\\% \\implies \\textbf{ZERO RISK}`}
+                      math={`d = ${missM.toFixed(0)}\\text{ m} \\gg 10\\text{ m} \\implies P_c = 0\\% \\implies \\textbf{${cautiousLanguage ? "REPORTED Pc = 0" : "ZERO RISK"}}`}
                     />
                     <p className="text-[11px] text-muted-foreground">
-                      The distance ({missM.toFixed(0)} meters) is hundreds of times larger than the satellites. Probability is 0%, so no move is needed.
+                      {cautiousLanguage ? `The distance (${missM.toFixed(0)} meters) is compared with object size in this reading aid. The source Pc is 0% for this update; that does not replace uncertainty review.` : `The distance (${missM.toFixed(0)} meters) is hundreds of times larger than the satellites. Probability is 0%, so no move is needed.`}
                     </p>
                   </div>
                 )}
@@ -165,7 +183,7 @@ export function ExplanationCard({
                       math={`\\frac{1}{10{,}000{,}000} \\le P_c = \\frac{1}{${oneInN?.toLocaleString()}} < \\frac{1}{10{,}000} \\implies \\textbf{WATCH}`}
                     />
                     <p className="text-[11px] text-muted-foreground">
-                      Risk is elevated but not critical. Keep monitoring upcoming radar passes.
+                      {cautiousLanguage ? "The reported Pc is elevated but below the action level; keep monitoring upcoming radar passes." : "Risk is elevated but not critical. Keep monitoring upcoming radar passes."}
                     </p>
                   </div>
                 )}
@@ -173,10 +191,10 @@ export function ExplanationCard({
                   <div className="space-y-1.5">
                     <Latex
                       block
-                      math={`P_c < \\frac{1}{10{,}000{,}000} \\implies \\textbf{LOW RISK}`}
+                      math={`P_c < \\frac{1}{10{,}000{,}000} \\implies \\textbf{${cautiousLanguage ? "BELOW WATCH LEVEL" : "LOW RISK"}}`}
                     />
                     <p className="text-[11px] text-muted-foreground">
-                      Collision chance is less than 1 in 10 million. Safe pass.
+                      {cautiousLanguage ? "The reported Pc is less than 1 in 10 million; continue to interpret it with positional uncertainty and future updates." : "Collision chance is less than 1 in 10 million. Safe pass."}
                     </p>
                   </div>
                 )}

@@ -90,19 +90,23 @@ export function EventSummaryCard({
   now,
   selected,
   onSelect,
+  onOpenDetails,
   view,
   archived,
   onToggleArchive,
+  cautiousLanguage = false,
 }: {
   event: CdmEvent;
   analysis?: EventAnalysis;
   now: number;
   selected: boolean;
   onSelect: () => void;
+  onOpenDetails?: () => void;
   view: "operator" | "specialist";
   /** Archive state and toggle; leave out to hide the Archive button (for example in a details sidebar). */
   archived?: boolean;
   onToggleArchive?: () => void;
+  cautiousLanguage?: boolean;
 }) {
   const c = latestRevision(event).cdm;
   const title = `${c.sat1.name ?? c.sat1.designator} / ${c.sat2.name ?? c.sat2.designator}`;
@@ -133,14 +137,14 @@ export function EventSummaryCard({
           {analysis && <p className={`ops-action ops-action-${analysis.severity.toLowerCase()}`}>{actionLabel(analysis.severity)}</p>}
           <p className="ops-phone" aria-label="Phone summary">{phoneSummary(c, now)}</p>
           <div className="ops-links">
-            <button className="ops-link" onClick={onSelect}>Open full details (specialist view) <span aria-hidden="true">↗</span></button>
+            <button className="ops-link" onClick={onOpenDetails ?? onSelect} onKeyDown={(keyboardEvent) => { if (keyboardEvent.key === "Enter" || keyboardEvent.key === " ") { keyboardEvent.preventDefault(); (onOpenDetails ?? onSelect)(); } }}>Open full details (specialist view) <span aria-hidden="true">↗</span></button>
             {onToggleArchive && <button className="ops-link ops-link-quiet" onClick={onToggleArchive}>{archived ? "Restore to active" : "Archive"}</button>}
           </div>
         </>
       ) : (
         <>
           <MissSplit cdm={c} />
-          <MissVsUncertaintyBlock cdm={c} />
+          <MissVsUncertaintyBlock cdm={c} cautiousLanguage={cautiousLanguage} />
           <LastObs cdm={c} now={now} />
           <div className="ops-block">
             <div className="ops-block-title">Position uncertainty, 1σ (R radial · I in-track · C cross-track)</div>
