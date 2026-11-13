@@ -44,7 +44,7 @@ export function severityBands(): SeverityBand[] {
       severity: "ZERO",
       range: "Pc exactly 0 in the CDM",
       action: "No action",
-      meaning: "The tracking data gives no chance of collision. Shown separately from a very small, non-zero Pc.",
+      meaning: "The CDM rounds the chance down to 0. The true chance is never exactly zero, but it is less than 0.0000001% (below 1 in a billion), so the pass is safe.",
       basis: "Source value is exactly zero.",
     },
     {

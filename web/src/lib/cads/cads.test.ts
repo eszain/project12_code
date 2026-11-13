@@ -311,15 +311,16 @@ it("keeps the same event groups when CDMs arrive in any order", () => {
 
     const zero = sev.find((x) => x.severity === "ZERO")!;
     expect(zero.why.some((w) => w.includes("Latest CDM reports Pc exactly 0"))).toBe(true);
-    expect(zero.why.some((w) => w.includes("0% overlap"))).toBe(true);
+    expect(zero.why.some((w) => w.includes("barely overlap"))).toBe(true);
+    expect(zero.why.join(" ")).not.toContain(" 0%");
   });
 
   it("formats odds, distances, and speeds for a non-technical audience", () => {
-    expect(formatOdds(0)).toBe("0% (zero chance of collision)");
+    expect(formatOdds(0)).toBe("less than 0.0000001% (reported as 0 in the CDM)");
     expect(formatOdds(3.888786e-4)).toBe("1 in 2,571 (0.04%)");
     expect(formatOdds(1e-6)).toBe("1 in 1 million (less than 0.001%)");
     expect(formatShortOdds(3.888786e-4)).toBe("1 in 2,571");
-    expect(formatShortOdds(0)).toBe("0%");
+    expect(formatShortOdds(0)).toBe("< 0.0000001%");
     expect(formatShortOdds(7.665263e-9)).toBe("1 in 130.5M"); // below a billion: unchanged
     expect(formatShortOdds(6.12e-12)).toBe("< 1 in 1B"); // very small values stay short enough for a card
     expect(formatOdds(6.12e-12)).toBe("less than 1 in 1 billion (practically zero)");
@@ -563,7 +564,7 @@ describe("operator phone summary (C1)", () => {
   it("says so when the pass is over, and handles a zero or missing Pc", () => {
     const x = c();
     expect(phoneSummary(x, x.tca + 2 * H)).toContain("closest approach was 2.0 hours ago");
-    expect(phoneSummary({ ...x, pc: 0 }, x.tca)).toContain("collision chance 0%");
+    expect(phoneSummary({ ...x, pc: 0 }, x.tca)).toContain("collision chance < 0.0000001%");
     expect(phoneSummary({ ...x, pc: null }, x.tca)).toContain("collision chance not provided");
   });
   it("marks a debris object", () => {

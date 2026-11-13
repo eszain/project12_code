@@ -36,7 +36,7 @@ function PcChart({ points }: { points: TrendPoint[] }) {
   for (let e = axis.minExp; e <= axis.maxExp; e++) ticks.push({ frac: pcFraction(10 ** e, axis), label: `1e${e}` });
   const pts = points.map((p, i) => ({ x: px(i, points.length), y: py(pcFraction(p.pc, axis)), zero: p.pc === 0, p }));
   const known = pts.filter((q) => q.p.pc !== null);
-  const summary = points.map((p) => `CDM ${p.n}: ${p.pc === null ? "not provided" : p.pc === 0 ? "0" : formatShortOdds(p.pc)}`).join("; ");
+  const summary = points.map((p) => `CDM ${p.n}: ${p.pc === null ? "not provided" : formatShortOdds(p.pc)}`).join("; ");
   return (
     <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Pc trend across CDMs. ${summary}`} className="chart">
       <Frame points={points} yTicks={ticks} />
