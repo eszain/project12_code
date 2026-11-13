@@ -5,6 +5,7 @@ import type { NormalizedCdm, ObjectInfo } from "@/lib/cads/parser";
 import { lastObservations, positionSigmasM, type LastObservation } from "@/lib/cads/quality";
 import { CONFIG, latestRevision, type CdmEvent } from "@/lib/cads/store";
 import { actionLabel } from "@/lib/cads/severity";
+import { riskChecks } from "@/lib/cads/risk-checks";
 import { MissVsUncertaintyBlock } from "./calculation-details";
 import { SeverityBadge } from "./severity-badge";
 import { hoursBetween, isoZ } from "@/lib/cads/time";
@@ -132,6 +133,14 @@ export function EventSummaryCard({
             {c.pc === null ? <span className="ops-row-label">not provided</span> : formatShortOdds(c.pc)}
           </Metric>
       </dl>
+      {analysis && (
+        <div className="ops-block" aria-label="Risk analysis">
+          <div className="ops-block-title">Risk analysis</div>
+          {riskChecks(event, now).map((check) => (
+            <div key={check.name} className="ops-row"><span className="ops-row-label">{check.name}: </span>{check.result}</div>
+          ))}
+        </div>
+      )}
       {view === "operator" ? (
         <>
           {analysis && <p className={`ops-action ops-action-${analysis.severity.toLowerCase()}`}>{actionLabel(analysis.severity)}</p>}
