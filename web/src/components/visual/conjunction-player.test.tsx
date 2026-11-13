@@ -81,11 +81,17 @@ it("labels the what-if as imaginary and only collides there", async () => {
   expect(screen.queryByRole("note")).toBeNull();
 });
 
-it("jumps to the end without animating when reduced motion is on", async () => {
+it("still plays when reduced motion is on, and shows the burst without flying particles", async () => {
   reducedMotion = true;
   const user = userEvent.setup();
-  render(<ConjunctionPlayer event={highRisk()} />);
+  const { container } = render(<ConjunctionPlayer event={highRisk()} />);
   await user.click(screen.getByRole("button", { name: "Play" }));
-  expect((screen.getByRole("slider") as HTMLInputElement).value).toBe("1000");
-  expect(screen.getByText(/The pass is over/)).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Pause" })).toBeTruthy();
+  expect((screen.getByRole("slider") as HTMLInputElement).value).not.toBe("1000");
+
+  await user.click(screen.getByRole("button", { name: /What if they hit/ }));
+  const scrub = screen.getByRole("slider") as HTMLInputElement;
+  fireEvent.change(scrub, { target: { value: scrub.max } });
+  const particle = container.querySelector(".player-particle")!;
+  expect(Number(particle.getAttribute("cx"))).not.toBe(400); // already spread out, not flying from the centre
 });

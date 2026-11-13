@@ -5,6 +5,8 @@
 // The banner says in plain words whether the pass is safe; severity comes from the CDM's own Pc.
 // "What if they hit?" is a clearly labelled imaginary collision. Normal playback never collides.
 // GSAP drives one timeline (play, pause, reset, scrub, speed); the scene is SVG.
+// Playback only starts when the viewer presses a button, so it runs even with reduced motion turned on
+// (Windows "Animation effects" off). Reduced motion only replaces the flying burst with its still end state.
 
 import { useId, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import gsap from "gsap";
@@ -72,26 +74,20 @@ export function ConjunctionPlayer({ event }: { event: CdmEvent }) {
       t.to(state, { p: end, duration: PLAY_SECONDS * end, ease: "none", onUpdate: () => setProgress(state.p) });
       if (mode === "whatIf") {
         t.call(() => setBurst(true));
-        t.fromTo(".player-flash", { attr: { r: 4 }, opacity: 0.95 }, { attr: { r: 110 }, opacity: 0, duration: 0.7, ease: "power2.out", immediateRender: false });
-        t.fromTo(
-          ".player-particle",
-          { attr: { cx: CX, cy: CY }, opacity: 1 },
-          {
-            attr: { cx: (i: number) => CX + PARTICLES[i].dx * BURST_REACH_PX, cy: (i: number) => CY + PARTICLES[i].dy * BURST_REACH_PX },
-            opacity: 0.35, // a faint debris cloud stays after the burst
-            duration: 1.6,
-            ease: "power3.out",
-            immediateRender: false,
-          },
-          "<",
-        );
+        const debris = { attr: { cx: (i: number) => CX + PARTICLES[i].dx * BURST_REACH_PX, cy: (i: number) => CY + PARTICLES[i].dy * BURST_REACH_PX }, opacity: 0.35 };
+        if (reduced) {
+          t.set(".player-particle", debris);
+        } else {
+          t.fromTo(".player-flash", { attr: { r: 4 }, opacity: 0.95 }, { attr: { r: 110 }, opacity: 0, duration: 0.7, ease: "power2.out", immediateRender: false });
+          // A faint debris cloud stays after the burst.
+          t.fromTo(".player-particle", { attr: { cx: CX, cy: CY }, opacity: 1 }, { ...debris, duration: 1.6, ease: "power3.out", immediateRender: false }, "<");
+        }
       }
       t.timeScale(speed);
       timeline.current = t;
       if (autoplay.current) {
         autoplay.current = false;
-        if (reduced) t.progress(1);
-        else t.play();
+        t.play();
       }
     },
     { scope: root, dependencies: [track, mode, reduced], revertOnUpdate: true },
@@ -113,12 +109,6 @@ export function ConjunctionPlayer({ event }: { event: CdmEvent }) {
     if (playing) {
       t.pause();
       setPlaying(false);
-      return;
-    }
-    if (reduced) {
-      // Show the end state without animating.
-      t.progress(1);
-      setProgress(end);
       return;
     }
     if (t.progress() >= 1) {
@@ -158,7 +148,7 @@ export function ConjunctionPlayer({ event }: { event: CdmEvent }) {
     autoplay.current = next === "whatIf";
     setProgress(0);
     setBurst(false);
-    setPlaying(next === "whatIf" && !reduced);
+    setPlaying(next === "whatIf");
     setMode(next);
   };
 
