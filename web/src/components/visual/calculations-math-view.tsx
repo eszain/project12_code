@@ -178,3 +178,4 @@ export function CalculationsMathView({ event }: { event: CdmEvent }) {
     </div>
   );
 }
+
