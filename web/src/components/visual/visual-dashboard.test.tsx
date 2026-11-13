@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import "fake-indexeddb/auto";
 
 import {
   cleanup,
@@ -15,12 +16,25 @@ import path from "node:path";
 import {
   afterEach,
   beforeAll,
+  beforeEach,
   expect,
   it,
   vi,
 } from "vitest";
 
+import { IndexedDbEventPersistence } from "@/lib/cads/event-persistence";
 import { VisualDashboard } from "./visual-dashboard";
+
+const testPersistence = new IndexedDbEventPersistence();
+beforeEach(async () => {
+  await testPersistence.clear();
+});
+
+// Render, then wait until the saved session has been restored and the actions are enabled.
+async function renderReady() {
+  render(<VisualDashboard stepDelayMs={0} />);
+  await waitFor(() => expect(screen.getByRole("button", { name: /Load sample data/ })).toHaveProperty("disabled", false));
+}
 
 beforeAll(() => {
   const mq = (query: string) => ({
@@ -60,8 +74,8 @@ beforeAll(() => {
   });
 });
 
-it("renders the left sidebar, the player and the event details sidebar", () => {
-  render(<VisualDashboard stepDelayMs={0} />);
+it("renders the left sidebar, the player and the event details sidebar", async () => {
+  await renderReady();
 
   expect(
     screen.getByLabelText("Data and events")
@@ -80,7 +94,7 @@ it("renders the left sidebar, the player and the event details sidebar", () => {
 
 it("loads the sample events, selects a row, and switches the detail view", async () => {
   const user = userEvent.setup();
-  render(<VisualDashboard stepDelayMs={0} />);
+  await renderReady();
 
   await user.click(screen.getByRole("button", { name: /Load sample data/ }));
   const rows = await screen.findAllByRole("button", { name: /Select .*Severity/ });
@@ -105,7 +119,7 @@ it("loads the sample events, selects a row, and switches the detail view", async
 
 it("supports keyboard event selection and detail-view switching", async () => {
   const user = userEvent.setup();
-  render(<VisualDashboard stepDelayMs={0} />);
+  await renderReady();
 
   const loadButton = screen.getByRole("button", { name: /Load sample data/ });
   await user.click(loadButton);
@@ -147,7 +161,7 @@ const upload = (name: string, file: string) =>
 
 it("shows which uploaded files were accepted and why others were not", async () => {
   const user = userEvent.setup();
-  render(<VisualDashboard stepDelayMs={0} />);
+  await renderReady();
   await user.upload(screen.getByLabelText("Choose CDM files (JSON or KVN)"), [
     upload("mine.json", "public/fixtures/synthetic/synthetic_high_risk_3.json"),
     upload("missing_tca.json", "../data/fixtures/invalid/missing_tca.json"),
@@ -163,7 +177,7 @@ it("shows which uploaded files were accepted and why others were not", async () 
 
 it("shows the stored CDM fields unchanged in the specialist view", async () => {
   const user = userEvent.setup();
-  render(<VisualDashboard stepDelayMs={0} />);
+  await renderReady();
   await user.upload(screen.getByLabelText("Choose CDM files (JSON or KVN)"), upload("mine.json", "public/fixtures/synthetic/synthetic_high_risk_3.json"));
   const [row] = await screen.findAllByRole("button", { name: /Select .*Severity/ });
   await user.click(row);

@@ -1,10 +1,18 @@
 // @vitest-environment jsdom
+import "fake-indexeddb/auto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, beforeAll, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, expect, it, vi } from "vitest";
 import { CadsApp } from "./cads-app";
+import { IndexedDbEventPersistence } from "@/lib/cads/event-persistence";
+
+const testPersistence = new IndexedDbEventPersistence();
+
+beforeEach(async () => {
+  await testPersistence.clear();
+});
 
 beforeAll(() => {
   const mq = (q: string) => ({ matches: false, media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}, onchange: null, dispatchEvent: () => false });
@@ -18,8 +26,21 @@ afterEach(cleanup);
 
 it("loads the CDMs one at a time, oldest first, counting them in the status line", async () => {
   const user = userEvent.setup();
-  render(<CadsApp stepDelayMs={40} />);
-  await user.click(screen.getByRole("button", { name: /Load data/ }));
+
+render(<CadsApp stepDelayMs={40} />);
+
+// Wait until IndexedDB initialization is complete
+// and the dashboard is ready for interaction.
+await waitFor(() => {
+  expect(
+    screen.getByRole("button", { name: /Load data/ })
+  ).toHaveProperty("disabled", false);
+});
+
+await user.click(
+  screen.getByRole("button", { name: /Load data/ })
+);
+
   await waitFor(() => expect(screen.getByText(/Loading CDM 2 of 9/)).toBeTruthy()); // still in progress: not all at once
   expect(screen.getByRole("button", { name: /Load data/ })).toHaveProperty("disabled", true); // no second load while one is running
   expect(within(screen.getByRole("list", { name: "Event list" })).getAllByRole("listitem").length).toBeLessThan(3);

@@ -72,3 +72,41 @@ export function statusCounts(events: CdmEvent[], nowMs: number, overrides: Recor
   const archived = events.filter((e) => isArchived(e, nowMs, overrides)).length;
   return { active: events.length - archived, archived };
 }
+
+
+/**
+ * Provides the event-list data needed by the visual dashboard.
+ * Reuses existing filtering, sorting and archive logic.
+ */
+export function getEventListData(
+  events: CdmEvent[],
+  filters: RegisterFilters,
+  analysed: boolean,
+  nowMs: number,
+  archiveOverrides: Record<number, boolean> = {},
+  page = 1
+) {
+  const counts = statusCounts(
+    events,
+    nowMs,
+    archiveOverrides
+  );
+
+  const filteredEvents = filterAndSort(
+    events,
+    filters,
+    analysed,
+    nowMs,
+    archiveOverrides
+  );
+
+  const paginated = paginate(filteredEvents, page);
+
+  return {
+    events: paginated.items,
+    total: paginated.total,
+    page: paginated.page,
+    pages: paginated.pages,
+    counts,
+  };
+}
