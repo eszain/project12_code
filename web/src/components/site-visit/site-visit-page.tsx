@@ -16,6 +16,7 @@ import {
 import "./site-visit.css";
 import { CRITERIA, LINKS, SNAPSHOT_DATE, STATUS_LABEL, totalWeight, type Status } from "@/lib/site-visit";
 import { ExternalLink, StatusBadge } from "./parts";
+import { ThemeToggle } from "./theme-toggle";
 import {
   AgileSection, ArchitectureSection, ImpactSection, ObjectivesSection, QualitySection, RequirementsSection, RoadmapSection, StakeholdersSection,
 } from "./sections";
@@ -176,6 +177,7 @@ export function SiteVisitPage() {
           <span className="hidden text-sm text-muted-foreground sm:inline">Site visit evidence</span>
           <nav aria-label="Site" className="ml-auto flex items-center gap-4 text-sm text-muted-foreground">
             <Link href="/vision" className="hover:text-foreground">Vision</Link>
+            <ThemeToggle />
             <Link href="/dashboard" className="rounded-md border border-foreground/30 px-2.5 py-1 text-foreground hover:bg-muted">Open dashboard <span aria-hidden="true">↗</span></Link>
           </nav>
         </header>

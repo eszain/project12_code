@@ -1,13 +1,26 @@
-/* Greyscale theme for /site-visit. The global dark theme uses a blue sidebar highlight, so it is replaced here.
-   Every other colour comes from the neutral shadcn tokens. */
+/* Greyscale theme for /site-visit. Light and dark both come from the neutral shadcn tokens in globals.css,
+   so the page only overrides what the global stylesheet or the Animate UI highlight would otherwise colour.
+   next-themes sets html.light or html.dark; the global .dark rules then supply the tokens. */
+
 .site-visit {
   --sidebar-primary: oklch(0.922 0 0);
   --sidebar-primary-foreground: oklch(0.205 0 0);
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+html.light .site-visit {
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+}
+
 /* The global stylesheet paints <body> navy with a blue-white text colour. Override it while this page is open. */
 body:has(.site-visit) {
   background: oklch(0.145 0 0);
   color: oklch(0.985 0 0);
+}
+
+html.light body:has(.site-visit) {
+  background: oklch(1 0 0);
+  color: oklch(0.145 0 0);
 }
