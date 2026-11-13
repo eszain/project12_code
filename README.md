@@ -33,6 +33,7 @@ Still experimental: the recalculated Pc has not been validated against NASA CARA
 | `/` | Landing page: 3D Earth with orbits, feature overview, **Open Dashboard** |
 | `/dashboard` | The visual dashboard (v0.3 beta): data and event list on the left, near-miss player in the centre, event details on the right |
 | `/old-dashboard` | The v0.2.5 console: Operator / Specialist views, CDM history and trend charts, plain-language explanation |
+| `/site-visit` | Evidence for the Fall Agile Site Visit rubric, one section per criterion, with the as-built architecture and UML diagrams (sources in `docs/diagrams`) |
 | `/events`, `/analysis`, `/alerts` | Placeholder pages for planned features |
 
 Same workflow as the Python app, but the core logic (parser, grouping, severity, experimental Pc, maneuver trade, alerts) is a TypeScript port that runs in the browser tab. Nothing is stored or sent anywhere; refresh or **Reset** clears it. UI: Next.js 16, Tailwind, a dark console design, and a three.js Earth on the landing page.
