@@ -1,0 +1,47 @@
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam defaultFontSize 13
+skinparam ArrowColor #475569
+skinparam ArrowFontColor #334155
+skinparam ArrowFontSize 11
+skinparam roundCorner 10
+skinparam class {
+  BackgroundColor #EAF1FB
+  BorderColor #6F8FBF
+  HeaderBackgroundColor #D5E4F7
+  FontStyle bold
+}
+skinparam component {
+  BackgroundColor #D5E4F7
+  BorderColor #6F8FBF
+}
+skinparam package {
+  BackgroundColor #F5F8FD
+  BorderColor #9DB4D6
+  FontStyle bold
+}
+skinparam database {
+  BackgroundColor #FFF4DE
+  BorderColor #C99A3B
+}
+skinparam note {
+  BackgroundColor #FFFBEA
+  BorderColor #C9B458
+}
+skinparam state {
+  BackgroundColor #EAF1FB
+  BorderColor #6F8FBF
+}
+skinparam activity {
+  BackgroundColor #EAF1FB
+  BorderColor #6F8FBF
+  DiamondBackgroundColor #FFF4DE
+  DiamondBorderColor #C99A3B
+}
+skinparam sequence {
+  ParticipantBackgroundColor #D5E4F7
+  ParticipantBorderColor #6F8FBF
+  LifeLineBorderColor #94A3B8
+  ActorBorderColor #475569
+}

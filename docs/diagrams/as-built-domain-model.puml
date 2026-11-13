@@ -1,0 +1,111 @@
+@startuml as-built-domain-model
+!include _style.iuml
+title As-built domain model (web/src/lib/cads)
+hide empty methods
+
+class Store {
+  +importDocuments(docs): ImportReport
+  +addRule() / updateRule() / deleteRule()
+  +pauseNotifications() / resumeNotifications()
+  +exportState() / restoreState()
+  +reset()
+}
+class CdmEvent {
+  id: number
+  key: string
+  pairKey: string
+}
+class Revision {
+  id: number
+  sourceFile: string
+  sourceLabel: string
+  correlationNote: string
+}
+class NormalizedCdm {
+  messageKey: string
+  creationDate: number
+  tca: number
+  missDistanceM: number
+  relPosRtnM: V3
+  pc: number | null
+  pcRaw: string | null
+  sourceFormat: json | kvn
+  raw: Record<string, string>
+  warnings: string[]
+}
+class ObjectInfo {
+  designator: string
+  name: string
+  maneuverable: string
+  lastObEnd: number
+  covarianceRtn: M3
+}
+class AlertRule {
+  id: number
+  name: string
+  pcMin: number | null
+  missDistanceMaxM: number | null
+  hoursToTcaMax: number | null
+  objectIds: string[]
+}
+class AlertOccurrence {
+  id: number
+  createdAt: number
+  severity: Severity
+  matched: string[]
+  ruleVersion: number
+  superseded: boolean
+}
+class RuleChange {
+  action: created | updated | deleted
+  before: AlertRule
+  after: AlertRule
+}
+class NotificationPause {
+  mode: mute | snooze
+  reason: string
+  resumeAt: number | null
+}
+class OutboxEntry {
+  id: string
+  channel: local
+  status: DeliveryStatus
+  attempts: number
+  logs: DeliveryLog[]
+}
+class ImportReport {
+  records: RecordOutcome[]
+  counts: imported / duplicate / rejected
+}
+enum Severity {
+  ACTION
+  WATCH
+  LOW
+  ZERO
+  UNKNOWN
+}
+interface EventPersistence {
+  load()
+  save(state)
+  clear()
+}
+class IndexedDbEventPersistence
+
+Store "1" *-- "0..*" CdmEvent
+Store "1" *-- "0..*" AlertRule
+Store "1" *-- "0..*" AlertOccurrence
+Store "1" *-- "0..*" RuleChange
+Store ..> ImportReport : returns
+CdmEvent "1" *-- "1..*" Revision : contains,\nsorted by creation date
+Revision "1" *-- "1" NormalizedCdm
+NormalizedCdm "1" *-- "2" ObjectInfo : sat1, sat2
+AlertRule "1" <-- "0..*" AlertOccurrence : ruleId
+CdmEvent "1" <-- "0..*" AlertOccurrence : eventId
+Revision "1" <-- "0..*" AlertOccurrence : revisionId
+AlertOccurrence "1" <-- "0..1" OutboxEntry : alertId
+CdmEvent "1" <-- "0..1" NotificationPause : eventId
+AlertOccurrence ..> Severity
+RuleChange ..> AlertRule
+EventPersistence <|.. IndexedDbEventPersistence
+EventPersistence ..> Store : saves exportState()
+@enduml
