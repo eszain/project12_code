@@ -5,6 +5,8 @@ import { useRef, useState } from "react";
 import { Navigation } from "@/components/navigation";
 import { EventSummaryCard } from "./event-summary-card";
 import { CalculationDetails } from "./calculation-details";
+import { ImportReportSheet } from "./import-report-sheet";
+import { OriginalCdm } from "./original-cdm";
 import { CdmHistory } from "./cdm-history";
 import { EncounterPictureCard } from "./encounter-picture";
 import { ExplanationCard } from "./explanation-card";
@@ -31,7 +33,8 @@ const pad2 = (n: number) => String(n).padStart(2, "0");
 
 export function CadsApp({ stepDelayMs = 900 }: { stepDelayMs?: number } = {}) {
   const session = useCadsSession({ stepDelayMs });
-  const { snap, analysis, status, busy, now } = session;
+  const { snap, analysis, status, importReport, busy, now } = session;
+  const [reportOpen, setReportOpen] = useState(false);
   const [selected, setSelected] = useState<number | null>(null);
   // Operator view: only the key numbers and a one-line call summary. Specialist view: full detail.
   const [view, setView] = useState<"operator" | "specialist">("operator");
@@ -50,6 +53,7 @@ export function CadsApp({ stepDelayMs = 900 }: { stepDelayMs?: number } = {}) {
       setSelected(null);
       setFilters(DEFAULT_FILTERS);
       setPage(1);
+      setReportOpen(false);
     });
 
   const updateFilters = (patch: Partial<RegisterFilters>) => {
@@ -110,6 +114,8 @@ export function CadsApp({ stepDelayMs = 900 }: { stepDelayMs?: number } = {}) {
             }}
           />
           <p aria-live="polite" className="console-status">{status}</p>
+          <button type="button" className="button button-tertiary" onClick={() => setReportOpen(true)} disabled={!importReport}>View import report</button>
+          <ImportReportSheet report={importReport} open={reportOpen} onOpenChange={setReportOpen} />
         </div>
 
         <section className="summary-grid" aria-label="Event summary">
@@ -230,6 +236,7 @@ export function CadsApp({ stepDelayMs = 900 }: { stepDelayMs?: number } = {}) {
           <>
             <EncounterPictureCard event={selectedEvent} />
             <CdmHistory event={selectedEvent} />
+            <OriginalCdm raw={latestRevision(selectedEvent).cdm.raw} />
             <ExplanationCard event={selectedEvent} analysis={analysis?.[selectedEvent.id]} now={now} />
             <CalculationDetails event={selectedEvent} />
           </>

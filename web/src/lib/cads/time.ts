@@ -17,7 +17,7 @@ export function parseUtc(value: unknown): number {
   text = text.replace(/(\.\d{3})\d+/, "$1"); // keep milliseconds only
   if (!/(Z|[+-]\d{2}:?\d{2})$/i.test(text)) text += "Z"; // CDM epochs are UTC
   const ms = Date.parse(text);
-  if (!Number.isFinite(ms) || !/^\d{4}-\d{2}-\d{2}T/.test(text)) throw new Error(`not an ISO-8601/CCSDS timestamp: ${JSON.stringify(value)}`);
+  if (!Number.isFinite(ms) || !/^\d{4}-\d{2}-\d{2}T/.test(text)) throw new Error("not a valid time");
   return ms;
 }
 

@@ -78,7 +78,6 @@ class Settings:
     smtp_starttls: bool = True
     spacetrack_identity: str = ""
     spacetrack_password: str = ""
-    demo_safe_delivery: bool = True
 
     def reference_now(self) -> datetime:
         """The clock used for time-to-TCA and event status (fixed in replay mode)."""

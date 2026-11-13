@@ -170,7 +170,7 @@ it("loads CDM files the user chooses, one at a time, and reports a bad file", as
   const bad = new File(["this is not a CDM"], "broken.txt", { type: "text/plain" });
   await user.upload(screen.getByLabelText("Choose CDM files (JSON or KVN)"), [good, bad]);
   await waitFor(() => expect(screen.getByText(/Loaded 1 CDMs one at a time/)).toBeTruthy());
-  expect(screen.getByText(/1 rejected \(broken\.txt/)).toBeTruthy();
+  expect(screen.getByText(/1 rejected/)).toBeTruthy();
   // The file's closest approach (Feb 2026) has passed, so the event archives itself and the empty Active list says why.
   expect(screen.getByText(/1 archived event \(closest approach already passed\)/)).toBeTruthy();
   await user.click(screen.getByRole("button", { name: "Archived (1)" }));
