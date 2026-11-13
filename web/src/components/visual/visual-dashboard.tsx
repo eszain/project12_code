@@ -4,6 +4,7 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import type { CSSProperties } from "react";
@@ -36,6 +37,8 @@ import {
 
 import { RuleEditor } from "./rule-editor";
 import { OutboxPanel } from "./outbox-panel";
+import { ImportReportSheet } from "@/components/import-report-sheet";
+import { OriginalCdm } from "@/components/original-cdm";
 import { useCadsSession } from "@/components/use-cads-session";
 
 import {
@@ -71,8 +74,11 @@ export function VisualDashboard({
   const {
     snap,
     status,
+    importReport,
     busy,
     loadData,
+    loadFiles,
+    addTestEvents,
     reset,
     createRule,
     updateRule,
@@ -87,6 +93,9 @@ export function VisualDashboard({
 
   const [rulesOpen, setRulesOpen] = useState(false);
   const [outboxOpen, setOutboxOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [detailView, setDetailView] = useState<"operator" | "specialist">("operator");
+  const fileInput = useRef<HTMLInputElement>(null);
 
   const [muteState, setMuteState] =
     useState<MuteState>(EMPTY_MUTE_STATE);
@@ -181,6 +190,8 @@ export function VisualDashboard({
       setNotificationsOpen(false);
       setRulesOpen(false);
       setOutboxOpen(false);
+      setReportOpen(false);
+      setDetailView("operator");
       setMuteState(EMPTY_MUTE_STATE);
       setOutboxState(EMPTY_OUTBOX);
       setNow(Date.now());
@@ -392,6 +403,37 @@ export function VisualDashboard({
 
             <button
               type="button"
+              onClick={() => fileInput.current?.click()}
+              disabled={busy}
+              className="flex w-full items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50"
+            >
+              Upload CDM files
+            </button>
+
+            <button
+              type="button"
+              onClick={() => void addTestEvents()}
+              disabled={busy}
+              className="flex w-full items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50"
+            >
+              Add test events
+            </button>
+
+            <input
+              ref={fileInput}
+              type="file"
+              multiple
+              accept=".json,.kvn,.txt"
+              className="sr-only"
+              aria-label="Choose CDM files (JSON or KVN)"
+              onChange={(e) => {
+                void loadFiles(e.target.files);
+                e.target.value = "";
+              }}
+            />
+
+            <button
+              type="button"
               onClick={handleReset}
               disabled={busy}
               className="flex w-full items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50"
@@ -406,6 +448,15 @@ export function VisualDashboard({
             >
               {status}
             </p>
+
+            <button
+              type="button"
+              onClick={() => setReportOpen(true)}
+              disabled={!importReport}
+              className="text-left text-xs underline disabled:no-underline disabled:opacity-50"
+            >
+              View import report
+            </button>
           </div>
 
           <div className="mt-5 space-y-2">
@@ -475,11 +526,29 @@ export function VisualDashboard({
                     {selectedEvent.key}
                   </p>
 
+                  <div className="flex gap-2" role="group" aria-label="Detail view">
+                    {(["operator", "specialist"] as const).map((view) => (
+                      <button
+                        key={view}
+                        type="button"
+                        aria-pressed={detailView === view}
+                        onClick={() => setDetailView(view)}
+                        className="rounded-md border px-2 py-1 text-xs capitalize"
+                      >
+                        {view}
+                      </button>
+                    ))}
+                  </div>
+
                   <p className="text-sm">
                     {selectedAlerts.length
                       ? `${selectedAlerts.length} alert(s) triggered. Review this event.`
                       : "No alert rules have fired for this event."}
                   </p>
+
+                  {detailView === "specialist" && (
+                    <OriginalCdm raw={latestRevision(selectedEvent).cdm.raw} />
+                  )}
 
                   <MuteControls
                     key={selectedEvent.id}
@@ -520,6 +589,12 @@ export function VisualDashboard({
         onCreate={createRule}
         onUpdate={updateRule}
         onDelete={deleteRule}
+      />
+
+      <ImportReportSheet
+        report={importReport}
+        open={reportOpen}
+        onOpenChange={setReportOpen}
       />
 
       <OutboxPanel

@@ -91,13 +91,13 @@ class Reader {
   time(key: string, required = false): number | null {
     const v = this.text(key);
     if (v === null) {
-      if (required) this.errors.push(`missing required field ${key}`);
+      if (required) this.errors.push(missingField(key));
       return null;
     }
     try {
       return parseUtc(v);
-    } catch (e) {
-      this.problem(required, `${key}: ${(e as Error).message}`);
+    } catch {
+      this.problem(required, invalidTime(key));
       return null;
     }
   }
@@ -219,7 +219,7 @@ export function normalizeRecord(rec: Record<string, string>, sourceFormat: Norma
   if (pcRaw !== null) {
     const n = Number(pcRaw);
     if (!Number.isFinite(n)) r.errors.push(`COLLISION_PROBABILITY is not numeric: ${JSON.stringify(pcRaw)}`);
-    else if (n < 0 || n > 1) r.errors.push(`COLLISION_PROBABILITY must be between 0 and 1, got ${JSON.stringify(pcRaw)}`);
+    else if (n < 0 || n > 1) r.errors.push("Collision probability must be between 0 and 1.");
     else pc = n;
   } else r.warnings.push("COLLISION_PROBABILITY not provided by the source (shown as 'not provided', not zero)");
 
@@ -228,7 +228,7 @@ export function normalizeRecord(rec: Record<string, string>, sourceFormat: Norma
   const relVel = r.vector(["RELATIVE_VELOCITY_R", "RELATIVE_VELOCITY_T", "RELATIVE_VELOCITY_N"], SPEED_MS);
   const sat1 = objectInfo(r, "SAT1_");
   const sat2 = objectInfo(r, "SAT2_");
-  if (sat1.designator && sat1.designator === sat2.designator) r.errors.push("SAT1 and SAT2 have the same OBJECT_DESIGNATOR");
+  if (sat1.designator && sat1.designator === sat2.designator) r.errors.push("Both objects are the same.");
 
   if (relPos && miss !== null) {
     const n = norm(relPos);
@@ -274,6 +274,7 @@ export function normalizeRecord(rec: Record<string, string>, sourceFormat: Norma
 
 /** Parse one file: a JSON object, a JSON array of CDMs, or a CCSDS KVN message. */
 export function parseDocument(content: string, filename = ""): ParseResult[] {
+  void filename;
   const text = content.replace(/^﻿/, "");
   const fail = (msg: string): ParseResult[] => [{ recordIndex: 0, cdm: null, errors: [msg], warnings: [] }];
   const s = text.trimStart();
@@ -282,8 +283,8 @@ export function parseDocument(content: string, filename = ""): ParseResult[] {
     let data: unknown;
     try {
       data = JSON.parse(text);
-    } catch (e) {
-      return fail(`invalid JSON: ${(e as Error).message}`);
+    } catch {
+      return fail("This file is cut off and is not valid JSON.");
     }
     const records = Array.isArray(data) ? data : [data];
     if (!records.length) return fail("JSON array contains no CDM records");
@@ -301,5 +302,17 @@ export function parseDocument(content: string, filename = ""): ParseResult[] {
       return fail(`invalid CCSDS KVN: ${(e as Error).message}`);
     }
   }
-  return fail(`unrecognised format${filename ? ` (${filename})` : ""}: expected Space-Track CDM JSON or CCSDS CDM KVN`);
+  return fail("This file is not a conjunction message.");
+}
+
+function missingField(key: string): string {
+  if (key === "TCA") return "TCA is missing.";
+  if (key === "CREATION_DATE") return "Creation date is missing.";
+  return `missing required field ${key}`;
+}
+
+function invalidTime(key: string): string {
+  if (key === "CREATION_DATE") return "Creation date is not a valid time.";
+  if (key === "TCA") return "Closest approach time is not a valid time.";
+  return `${key} is not a valid time.`;
 }

@@ -22,8 +22,10 @@ import {
 import {
   CONFIG,
   Store,
-  type Snapshot,
   type AlertRule,
+  type ImportReport,
+  type RecordOutcome,
+  type Snapshot,
 } from "@/lib/cads/store";
 
 const EMPTY: Snapshot = {
@@ -66,6 +68,7 @@ export function useCadsSession({
 
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(0);
+  const [importReport, setImportReport] = useState<ImportReport | null>(null);
 
   const scaleCount = useRef(0);
   const alive = useRef(true);
@@ -129,8 +132,10 @@ export function useCadsSession({
       duplicate: 0,
       rejected: 0,
     };
-
-    const problems: string[] = [];
+    const records: RecordOutcome[] = [];
+    // The nine-file demo pauses between messages. Larger loads stay in the same order
+    // but yield every batch so the status line can update without a long pause.
+    const pauseEach = ordered.length <= 12;
 
     for (let i = 0; i < ordered.length; i++) {
       if (!alive.current) {
@@ -148,32 +153,22 @@ export function useCadsSession({
       total.imported += r.counts.imported;
       total.duplicate += r.counts.duplicate;
       total.rejected += r.counts.rejected;
-
-      r.records
-        .filter((x) => x.status === "rejected")
-        .forEach((x) =>
-          problems.push(
-            `${x.file}: ${x.errors[0] ?? "rejected"}`,
-          ),
-        );
+      records.push(...r.records);
 
       if (i < ordered.length - 1) {
-        await sleep(stepDelayMs);
+        if (pauseEach) {
+          if (stepDelayMs > 0) await sleep(stepDelayMs);
+        } else if ((i + 1) % 20 === 0) {
+          await sleep(0);
+        }
       }
     }
 
-    const rejected = total.rejected
-      ? ` ${total.rejected} rejected (${problems
-          .slice(0, 2)
-          .join("; ")}${
-          problems.length > 2 ? "; …" : ""
-        }).`
-      : "";
+    setImportReport({ records, counts: total });
 
     return (
       `Loaded ${total.imported} CDMs one at a time, ` +
-      `oldest first (${total.duplicate} repeats ignored).` +
-      `${rejected} ${intro}`
+      `oldest first (${total.duplicate} repeats, ${total.rejected} rejected). ${intro}`
     );
   };
 
@@ -224,21 +219,19 @@ export function useCadsSession({
 
       scaleCount.current += SCALE_BATCH;
 
-      ensureDefaultRule();
-
-      store.importDocuments(sortByCreation(docs));
-
-      if (analysis) {
-        setAnalysis(analyseAll());
-      }
-
-      return (
+      const hadAnalysis = analysis !== null;
+      const summary = await feedDocuments(
+        docs,
         `Added ${SCALE_BATCH} generated test events ` +
-        `(${docs.length} CDMs) with invented values. ` +
-        (analysis
-          ? "Risk analysis refreshed."
-          : "Run the risk analysis to rate them.")
+          `(${docs.length} CDMs) with invented values. ` +
+          (hadAnalysis
+            ? "Risk analysis refreshed."
+            : "Run the risk analysis to rate them."),
       );
+
+      if (hadAnalysis) setAnalysis(analyseAll());
+
+      return summary;
     });
 
   const runAnalysis = () =>
@@ -255,6 +248,7 @@ export function useCadsSession({
     run(() => {
       store.reset();
       setAnalysis(null);
+      setImportReport(null);
       scaleCount.current = 0;
 
       after?.();
@@ -278,6 +272,7 @@ export function useCadsSession({
     snap,
     analysis,
     status,
+    importReport,
     busy,
     now,
     loadData,
