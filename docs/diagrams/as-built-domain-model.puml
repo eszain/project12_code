@@ -2,6 +2,7 @@
 !include _style.iuml
 title As-built domain model (web/src/lib/cads)
 hide empty methods
+hide circle
 
 class Store {
   +importDocuments(docs): ImportReport
