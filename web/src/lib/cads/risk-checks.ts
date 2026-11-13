@@ -29,7 +29,7 @@ export function riskChecks(event: CdmEvent, nowMs: number): RiskCheck[] {
   const severity = severityOf(cdm.pc);
   const level =
     severity === "UNKNOWN" ? "Not provided in the CDM, so the event cannot be rated"
-    : severity === "ZERO" ? "Exactly 0 in the CDM: CLEAR"
+    : severity === "ZERO" ? "Reported as 0 in the CDM (below 1 in a billion): CLEAR"
     : severity === "ACTION" ? `${odds(cdm.pc)}: at or above the action level of ${odds(CONFIG.pcAction)}, so ACTION`
     : severity === "WATCH" ? `${odds(cdm.pc)}: between the watch level of ${odds(CONFIG.pcWatch)} and the action level of ${odds(CONFIG.pcAction)}, so WATCH`
     : `${odds(cdm.pc)}: below the watch level of ${odds(CONFIG.pcWatch)}, so LOW`;
