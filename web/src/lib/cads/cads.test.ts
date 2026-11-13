@@ -118,7 +118,7 @@ describe("store, alerts and analysis (AC03)", () => {
     expect(s.importDocuments(docs("reconstructed")).counts.duplicate).toBe(6);
     expect(s.getSnapshot().alerts).toHaveLength(2);
     s.reset();
-    expect(s.getSnapshot()).toEqual({ events: [], rules: [], alerts: [], ruleChanges: [] });
+    expect(s.getSnapshot()).toEqual({ events: [], rules: [], alerts: [] });
   });
   it("demo scenario is re-dated to upcoming encounters and the analysis explains each event", async () => {
     const now = Date.now();
