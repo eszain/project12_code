@@ -11,7 +11,8 @@
 import { useId, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
-import { Pause, Play, RotateCcw, Undo2, Zap } from "lucide-react";
+import { AlertTriangle, Info, Orbit, Pause, Play, RotateCcw, ShieldAlert, ShieldCheck, Undo2, Zap } from "lucide-react";
+import { motion } from "motion/react";
 
 import { Button } from "@/components/animate-ui/components/buttons/button";
 import { formatSpeed } from "@/lib/cads/analyze";
@@ -293,11 +294,53 @@ export function ConjunctionPlayer({ event }: { event: CdmEvent }) {
 }
 
 function Banner({ verdict, line }: { verdict: ReturnType<typeof passVerdict>; line: string }) {
+  const Icon = {
+    safe: ShieldCheck,
+    caution: AlertTriangle,
+    danger: ShieldAlert,
+    unknown: Info,
+  }[verdict.tone] ?? Info;
+
+  const statusLabel = {
+    safe: "Nominal Conjunction",
+    caution: "Elevated Risk",
+    danger: "Critical Risk Event",
+    unknown: "Assessment Pending",
+  }[verdict.tone] ?? "Assessment";
+
   return (
-    <div className="player-banner">
-      <strong>{verdict.headline}</strong>
-      <span>{verdict.action}</span>
-      <p>{line}</p>
-    </div>
+    <motion.div
+      key={`${verdict.tone}-${verdict.headline}`}
+      initial={{ opacity: 0, y: 5 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.25, ease: "easeOut" }}
+      className={`player-banner player-banner-${verdict.tone}`}
+      role="status"
+    >
+      <div className="player-banner-glow" aria-hidden="true" />
+      <div className="player-banner-header">
+        <div className="player-banner-status-pill">
+          <span className="player-banner-beacon" aria-hidden="true">
+            <span className="player-banner-beacon-ping" />
+            <span className="player-banner-beacon-dot" />
+          </span>
+          <span>{verdict.action}</span>
+        </div>
+        <div className="player-banner-tag">
+          <Orbit className="player-banner-tag-icon" aria-hidden="true" />
+          <span>{statusLabel}</span>
+        </div>
+      </div>
+
+      <div className="player-banner-main">
+        <div className="player-banner-icon-wrap" aria-hidden="true">
+          <Icon className="player-banner-icon" />
+        </div>
+        <div className="player-banner-body">
+          <strong>{verdict.headline}</strong>
+          <p>{line}</p>
+        </div>
+      </div>
+    </motion.div>
   );
 }
