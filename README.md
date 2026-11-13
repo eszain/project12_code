@@ -17,13 +17,26 @@ The page starts empty (the database is wiped on every start; set `CADS_PERSIST=t
 
 Live demo: https://project12-code.vercel.app (also https://project12code.vercel.app)
 
-Same workflow as the Python app, but the core logic (parser, grouping, severity, experimental Pc, maneuver trade, alerts) is a TypeScript port that runs in the browser tab. Nothing is stored or sent anywhere; refresh or **Reset** clears it. UI: Next.js 16, Tailwind, a dark console design, and a three.js Earth on the landing page.
+**Version 0.3 (beta).** New in this version:
+- **Near-miss player** in the centre of `/dashboard`: a plain-language verdict ("Safe pass", "Too close: a maneuver may be needed"), play / pause / reset, a scrub bar, Slower / Normal / Faster, and a clearly labelled "What if they hit? (imaginary)" burst. Built with GSAP and SVG.
+- **Left sidebar:** load sample data, run risk analysis, load your own CDM files, add test events, the import report, and the event list (one row per event).
+- **Right sidebar:** the chosen event in the operator or specialist view, with the original CDM fields (read-only).
+- **Notifications:** alert rules, an outbox with delivery status, and mute / snooze. Delivery is a local simulation only; no email or webhook is sent.
+- **Risk checks:** probability level, trend, confidence and time to act for each event.
+- **Saved session:** events survive a page refresh (IndexedDB in your browser). **Reset** clears them.
+- A CDM Pc of exactly 0 is shown as "less than 0.0000001%", never "0%".
+
+Still experimental: the recalculated Pc has not been validated against NASA CARA reference cases. Severity always comes from the source Pc in the CDM.
 
 | Route | What it shows |
 |---|---|
 | `/` | Landing page: 3D Earth with orbits, feature overview, **Open Dashboard** |
-| `/dashboard` | The CDM app: load data, run risk analysis, Operator / Specialist views, CDM history and trend charts, plain-language explanation |
+| `/dashboard` | The visual dashboard (v0.3 beta): data and event list on the left, near-miss player in the centre, event details on the right |
+| `/old-dashboard` | The v0.2.5 console: Operator / Specialist views, CDM history and trend charts, plain-language explanation |
 | `/events`, `/analysis`, `/alerts` | Placeholder pages for planned features |
+
+Same workflow as the Python app, but the core logic (parser, grouping, severity, experimental Pc, maneuver trade, alerts) is a TypeScript port that runs in the browser tab. Nothing is stored or sent anywhere; refresh or **Reset** clears it. UI: Next.js 16, Tailwind, a dark console design, and a three.js Earth on the landing page.
+
 
 ```
 cd web
@@ -33,9 +46,11 @@ npm test           # port checked against the Python Pc results, plus click-thro
 npm run build
 ```
 
-On `/dashboard`, press **1. Load data**: the 9 bundled sample CDMs (`web/public/fixtures`, re-dated to now) load one at a time, oldest first. The six reconstructed SCISAT 1 CDMs form two encounters and the three synthetic CADS TEST CDMs form a third. Then press **2. Run risk analysis** for the severity of each event. The **Operator view** shows only TCA, miss distance, Pc and a one-line call summary; the **Specialist view** adds the radial / in-track / cross-track split, last observations, position uncertainty, and, after clicking an event, its CDM history, trend charts and explanation. **Reset** clears everything.
+On `/old-dashboard`, press **1. Load data**: the 9 bundled sample CDMs (`web/public/fixtures`, re-dated to now) load one at a time, oldest first. The six reconstructed SCISAT 1 CDMs form two encounters and the three synthetic CADS TEST CDMs form a third. Then press **2. Run risk analysis** for the severity of each event. The **Operator view** shows only TCA, miss distance, Pc and a one-line call summary; the **Specialist view** adds the radial / in-track / cross-track split, last observations, position uncertainty, and, after clicking an event, its CDM history, trend charts and explanation. **Reset** clears everything.
 
 On Windows, run the tests from a shell whose path starts with an upper-case drive letter (for example PowerShell in `C:\...`); with a lower-case `c:` path Vitest loads twice and every suite fails.
+
+On `/dashboard`, press **Load sample data** in the left sidebar, then choose an event to play its pass.
 
 **Deploy to Vercel:** import the repo and set *Root Directory* to `project12_code/web`. No environment variables or backend are needed.
 
