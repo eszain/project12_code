@@ -8,7 +8,7 @@ const eslintConfig = defineConfig([
   {
     // Third-party Animate UI code copied in by the shadcn CLI. Kept as published so it can be updated with
     // `npx shadcn add`; these newer React Compiler lint rules flag patterns the library uses on purpose.
-    files: ["src/components/animate-ui/**", "src/hooks/use-controlled-state.tsx", "src/hooks/use-mobile.ts"],
+    files: ["src/components/animate-ui/**", "src/hooks/use-controlled-state.tsx", "src/hooks/use-auto-height.tsx", "src/hooks/use-mobile.ts"],
     rules: {
       "react-hooks/purity": "off",
       "react-hooks/static-components": "off",

@@ -1,0 +1,37 @@
+@startuml ingest-sequence
+!include _style.iuml
+title CDM import to alert (as built in the web app)
+actor Operator
+participant "Dashboard\n(/dashboard)" as UI
+participant "Store\nstore.ts" as Store
+participant "Parser\nparser.ts, kvn.ts" as Parser
+participant "Correlation\ncorrelation.ts" as Corr
+participant "Rules\nevaluateRule()" as Rules
+participant "Outbox\noutbox.ts" as Outbox
+database "IndexedDB" as DB
+
+Operator -> UI : Load sample data / upload CDM files
+UI -> Store : importDocuments(docs), oldest first
+loop each record
+  Store -> Parser : parseDocument(content, filename)
+  alt invalid or incomplete
+    Parser --> Store : errors
+    Store -> Store : record "rejected" with reasons
+  else duplicate messageKey
+    Store -> Store : record "duplicate" (no new revision)
+  else valid
+    Parser --> Store : NormalizedCdm (raw payload and Pc text kept)
+    Store -> Corr : correlate(tca, same-pair events, 60 s window)
+    Corr --> Store : existing event or new event
+    Store -> Store : add Revision, keep revisions in creation order
+    Store -> Rules : evaluate each AlertRule on the new revision
+    Rules --> Store : matches + reasons
+    Store -> Store : create AlertOccurrence (qualifying only)
+  end
+end
+Store --> UI : ImportReport (imported / duplicate / rejected)
+UI -> Outbox : enqueue new alerts, deliver (local simulation)
+Outbox --> UI : status: pending, sent, failed or suppressed
+UI -> DB : save session
+UI --> Operator : event list, severity, near-miss player, import report
+@enduml

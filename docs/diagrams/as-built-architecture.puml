@@ -1,0 +1,64 @@
+@startuml as-built-architecture
+!include _style.iuml
+title CADS as-built architecture (v0.3 beta, Nov 13, 2026)
+left to right direction
+
+actor "Operator /\nSpecialist" as user
+file "CDM files\n(Space-Track JSON,\nCCSDS KVN)" as files
+
+package "Web app, deployed on Vercel (web/, runs in the browser tab)" {
+  package "Next.js routes" {
+    component "/ landing" as landing
+    component "/dashboard\nvisual dashboard" as dash
+    component "/old-dashboard\nv0.2.5 console" as old
+    component "/vision, /site-visit" as docs
+  }
+  package "Domain logic (src/lib/cads, TypeScript)" {
+    component "parser.ts + kvn.ts\nparse and validate" as parser
+    component "correlation.ts\ngroup CDMs into events" as corr
+    component "store.ts\nevents, revisions,\nrules, alerts" as store
+    component "severity.ts, risk-checks.ts,\nquality.ts, trend.ts" as risk
+    component "pc.ts, maneuver.ts\n(experimental)" as sci
+    component "outbox.ts\nlocal delivery simulation" as outbox
+  }
+  database "IndexedDB\n(event-persistence.ts)" as idb
+  file "public/fixtures\n9 sample CDMs" as fixtures
+}
+
+package "Python reference app (cads/, runs locally)" {
+  component "FastAPI REST API\n(cads/api)" as api
+  component "cdm/, correlation.py,\ningest.py" as pyingest
+  component "alerts/\nrules, dispatcher, channels" as pyalerts
+  component "analysis/\npc, maneuver, quality" as pyanalysis
+  database "SQLite\n(SQLAlchemy models)" as sqlite
+}
+
+user --> dash
+user --> old
+files --> dash : upload
+fixtures --> dash : Load sample data
+dash --> store
+old --> store
+store --> parser
+store --> corr
+dash --> risk
+dash --> sci
+store --> outbox : alert occurrences
+dash --> idb : save / restore session
+
+api --> pyingest
+api --> pyalerts
+api --> pyanalysis
+pyingest --> sqlite
+pyalerts --> sqlite
+pyingest ..> parser : same rules,\nported to TypeScript\nand cross-checked in tests
+
+note bottom of sqlite
+  PostgreSQL is supported by URL
+  but not yet tested (planned R2).
+end note
+note bottom of sci
+  Recalculated Pc is not validated
+  against NASA CARA yet (R2).
+end note
+@enduml

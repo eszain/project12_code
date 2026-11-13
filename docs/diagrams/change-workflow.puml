@@ -1,0 +1,22 @@
+@startuml change-workflow
+!include _style.iuml
+title Configuration management: from issue to release
+start
+:GitHub issue assigned to an owner;
+:Branch from main\n(feature/..., fix/...);
+:Commit work with tests;
+:Run npm test, npm run build, pytest locally;
+:Open pull request to main;
+repeat
+  :Teammate review;
+  backward :Address comments;
+repeat while (Approved?) is (no)
+->yes;
+:Merge to main;
+:Vercel builds and deploys main;
+if (Release point?) then (yes)
+  :Tag the release\n(v0.1-nov6, v0.2-nov11, v0.2.5, v0.3-beta);
+else (no)
+endif
+stop
+@enduml
