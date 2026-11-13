@@ -38,7 +38,7 @@ export function CadsApp({ stepDelayMs = 900 }: { stepDelayMs?: number } = {}) {
   const [filters, setFilters] = useState<RegisterFilters>(DEFAULT_FILTERS);
   const [page, setPage] = useState(1);
   // Events the user archived (true) or kept active (false) by hand; otherwise a passed closest approach archives it.
-  const [archiveOverride, setArchiveOverride] = useState<Record<number, boolean>>({});
+  const { archiveOverride, setArchiveOverride } = session;
   const fileInput = useRef<HTMLInputElement>(null);
 
   const loadData = () => session.loadData(() => setSelected(null));
@@ -48,7 +48,6 @@ export function CadsApp({ stepDelayMs = 900 }: { stepDelayMs?: number } = {}) {
   const reset = () =>
     session.reset(() => {
       setSelected(null);
-      setArchiveOverride({});
       setFilters(DEFAULT_FILTERS);
       setPage(1);
     });

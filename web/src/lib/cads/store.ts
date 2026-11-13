@@ -73,6 +73,19 @@ export interface Snapshot {
   alerts: AlertOccurrence[];
 }
 
+
+export interface PersistedStoreState {
+  version: 1;
+  snapshot: Snapshot;
+  nextIds: {
+    event: number;
+    revision: number;
+    rule: number;
+    alert: number;
+  };
+}
+
+
 export const latestRevision = (e: CdmEvent) => e.revisions[e.revisions.length - 1];
 
 const CAVEAT =
@@ -122,6 +135,62 @@ export class Store {
     this.listeners.forEach((l) => l());
   }
 
+  /**
+   * Export the full state for persistent storage.
+   */
+  exportState(): PersistedStoreState {
+    return {
+      version: 1,
+      snapshot: structuredClone(this.getSnapshot()),
+      nextIds: { ...this.ids },
+    };
+  }
+
+  /**
+   * Restore previously saved data.
+   * Publishes a new snapshot so subscribed UI updates.
+   */
+  restoreState(state: PersistedStoreState): void {
+    if (state.version !== 1) {
+      throw new Error("Unsupported stored data version");
+    }
+
+    const restored = structuredClone(state.snapshot);
+
+    this.events = restored.events;
+    this.rules = restored.rules;
+    this.alerts = restored.alerts;
+
+    // Avoid reusing IDs already present in saved records.
+    this.ids = {
+      event: Math.max(
+        state.nextIds.event,
+        1,
+        ...this.events.map((e) => e.id + 1)
+      ),
+      revision: Math.max(
+        state.nextIds.revision,
+        1,
+        ...this.events.flatMap((e) =>
+          e.revisions.map((r) => r.id + 1)
+        )
+      ),
+      rule: Math.max(
+        state.nextIds.rule,
+        1,
+        ...this.rules.map((r) => r.id + 1)
+      ),
+      alert: Math.max(
+        state.nextIds.alert,
+        1,
+        ...this.alerts.map((a) => a.id + 1)
+      ),
+    };
+
+    this.commit();
+  }
+
+
   reset() {
     this.events = [];
     this.rules = [];
@@ -160,20 +229,92 @@ export class Store {
     const existing = this.events.flatMap((e) => e.revisions.map((r) => ({ e, r }))).find((x) => x.r.cdm.messageKey === cdm.messageKey);
     if (existing) return { status: "duplicate", errors: [], warnings: [...warnings, `already imported (${cdm.messageKey}); not stored again`], eventId: existing.e.id, alertsCreated: 0 };
 
+
     const pk = pairKey(cdm.sat1.designator, cdm.sat2.designator);
     const sameCandidates = this.events.filter((e) => e.pairKey === pk);
-    const decision = correlate(cdm.tca, sameCandidates.map((e) => ({ eventId: e.id, tcas: e.revisions.map((r) => r.cdm.tca) })), CONFIG.correlationWindowS);
+
+    const decision = correlate(
+      cdm.tca,
+      sameCandidates.map((e) => ({
+        eventId: e.id,
+        tcas: e.revisions.map((r) => r.cdm.tca),
+      })),
+      CONFIG.correlationWindowS
+    );
+
+    // Find every event connected to the incoming CDM.
+    const matchingEvents = sameCandidates.filter((e) =>
+      e.revisions.some(
+        (r) =>
+          Math.abs(r.cdm.tca - cdm.tca) <=
+          CONFIG.correlationWindowS * 1000
+      )
+    );
+
     let event: CdmEvent;
-    if (decision.eventId === null) {
-      event = { id: this.ids.event++, key: `${cdm.sat1.designator}-${cdm.sat2.designator}-${tcaStamp(cdm.tca)}`, pairKey: pk, revisions: [] };
+
+    if (matchingEvents.length === 0) {
+      // No existing encounter matches: create a new event.
+      event = {
+        id: this.ids.event++,
+        key: `${cdm.sat1.designator}-${cdm.sat2.designator}-${tcaStamp(cdm.tca)}`,
+        pairKey: pk,
+        revisions: [],
+      };
       this.events.push(event);
     } else {
-      event = sameCandidates.find((e) => e.id === decision.eventId)!;
-      if (decision.ambiguous) warnings.push(decision.note);
+      // Keep the oldest event ID as the canonical identifier.
+      matchingEvents.sort((a, b) => a.id - b.id);
+      event = matchingEvents[0];
+
+      // Merge all other connected events into the canonical one.
+      for (const other of matchingEvents.slice(1)) {
+        event.revisions.push(...other.revisions);
+
+        // Existing alerts must point to the surviving event.
+        for (const alert of this.alerts) {
+          if (alert.eventId === other.id) {
+            alert.eventId = event.id;
+            alert.message = {
+              ...alert.message,
+              event: event.key,
+            };
+          }
+        }
+
+        this.events = this.events.filter(
+          (e) => e.id !== other.id
+        );
+      }
+
+      if (matchingEvents.length > 1) {
+        warnings.push(
+          `Merged ${matchingEvents.length} connected events into event ${event.id}`
+        );
+      }
     }
-    const revision: Revision = { id: this.ids.revision++, cdm, sourceFile: file, sourceLabel: label, correlationNote: decision.note };
+
+    const revision: Revision = {
+      id: this.ids.revision++,
+      cdm,
+      sourceFile: file,
+      sourceLabel: label,
+      correlationNote:
+        matchingEvents.length > 1
+          ? `Bridging revision merged ${matchingEvents.length} events`
+          : decision.note,
+    };
+
     event.revisions.push(revision);
-    event.revisions.sort((a, b) => a.cdm.creationDate - b.cdm.creationDate || a.id - b.id);
+
+    // Preserve the complete history in CDM creation order.
+    event.revisions.sort(
+      (a, b) =>
+        a.cdm.creationDate - b.cdm.creationDate ||
+        a.id - b.id
+    );
+
+
 
     let alertsCreated = 0;
     if (latestRevision(event).id === revision.id) alertsCreated = this.evaluateAlerts(event, revision);

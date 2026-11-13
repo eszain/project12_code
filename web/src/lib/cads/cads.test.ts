@@ -14,6 +14,8 @@ import { CONFIG, Store, severityOf } from "./store";
 import { hoursBetween } from "./time";
 import { actionLabel, needsAttention, severityBands } from "./severity";
 import { pcAxis, pcChange, pcFraction, trendPoints } from "./trend";
+import { getRevisionChanges } from "./revision-changes";
+import { getEventListData } from "./register";
 
 const DATA = join(__dirname, "../../../../data/fixtures");
 const PUBLIC = join(__dirname, "../../../public");
@@ -27,6 +29,24 @@ function permutations<T>(a: T[]): T[][] {
 }
 
 describe("ingestion and correlation (AC01, AC02)", () => {
+
+it("groups connected TCA revisions regardless of arrival order", () => {
+  const second = 1000;
+
+  const messages: [string, string, string, number][] = [
+    ["CDM-A", "SAT-1", "SAT-2", 0],
+    ["CDM-B", "SAT-1", "SAT-2", 120 * second],
+    ["CDM-C", "SAT-2", "SAT-1", 60 * second],
+  ];
+
+  for (const order of permutations(messages)) {
+    const groups = groupMessages(order, 60);
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]).toEqual(["CDM-A", "CDM-B", "CDM-C"]);
+  }
+});
+
   it("groups the six samples into the same two encounters in all 720 file orders", () => {
     const c = recon();
     const expected = new Set(["cdm_set_1.json|cdm_set_4.json", "cdm_set_2.json|cdm_set_3.json|cdm_set_5.json|cdm_set_6.json"]);
@@ -73,6 +93,139 @@ describe("experimental Pc matches the Python implementation", () => {
 });
 
 describe("store, alerts and analysis (AC03)", () => {
+
+
+it("keeps two passes 90 minutes apart as separate events", () => {
+  const base = JSON.parse(
+    read("reconstructed", "cdm_set_1.json")
+  );
+
+  const start = Date.parse(base.TCA);
+
+  function makeDoc(id: string, offsetSeconds: number) {
+    const document = {
+      ...base,
+      CDM_ID: id,
+      MESSAGE_ID: `separate-${id}`,
+      TCA: new Date(
+        start + offsetSeconds * 1000
+      ).toISOString(),
+    };
+
+    return {
+      name: `${id}.json`,
+      content: JSON.stringify(document),
+      label: "test",
+    };
+  }
+
+  const store = new Store();
+
+  store.importDocuments([
+    makeDoc("A", 0),
+    makeDoc("C", 5400),
+    makeDoc("B", 60),
+    makeDoc("D", 5460),
+  ]);
+
+  const events = store.getSnapshot().events;
+
+  expect(events).toHaveLength(2);
+  expect(
+    events.map((event) => event.revisions.length).sort()
+  ).toEqual([2, 2]);
+});
+
+
+it("merges existing events when a bridging CDM arrives", () => {
+  const base = JSON.parse(
+    read("reconstructed", "cdm_set_1.json")
+  );
+
+  const start = Date.parse(base.TCA);
+
+  function makeDoc(
+    id: string,
+    offsetSeconds: number
+  ) {
+    const document = {
+      ...base,
+      CDM_ID: id,
+      MESSAGE_ID: `bridge-${id}`,
+      TCA: new Date(
+        start + offsetSeconds * 1000
+      ).toISOString(),
+    };
+
+    return {
+      name: `${id}.json`,
+      content: JSON.stringify(document),
+      label: "test",
+    };
+  }
+
+  const store = new Store();
+
+  // A and B initially form two separate events.
+  store.importDocuments([
+    makeDoc("A", 0),
+    makeDoc("B", 120),
+  ]);
+
+  expect(store.getSnapshot().events).toHaveLength(2);
+
+  // C falls within 60 seconds of both events.
+  store.importDocuments([
+    makeDoc("C", 60),
+  ]);
+
+  const events = store.getSnapshot().events;
+
+  // All three revisions should now be one event.
+  expect(events).toHaveLength(1);
+  expect(events[0].revisions).toHaveLength(3);
+});
+
+
+it("keeps the same event groups when CDMs arrive in any order", () => {
+  const files = [
+    "cdm_set_1.json",
+    "cdm_set_2.json",
+    "cdm_set_3.json",
+    "cdm_set_4.json",
+    "cdm_set_5.json",
+    "cdm_set_6.json",
+  ];
+
+  const expected = [
+    "cdm_set_1.json|cdm_set_4.json",
+    "cdm_set_2.json|cdm_set_3.json|cdm_set_5.json|cdm_set_6.json",
+  ];
+
+  for (const order of permutations(files)) {
+    const store = new Store();
+
+    const docs = order.map((file) => ({
+      name: file,
+      content: read("reconstructed", file),
+      label: "test",
+    }));
+
+    store.importDocuments(docs);
+
+    const groups = store.getSnapshot().events
+      .map((event) =>
+        event.revisions
+          .map((revision) => revision.sourceFile)
+          .sort()
+          .join("|")
+      )
+      .sort();
+
+    expect(groups).toEqual(expected);
+  }
+});
+
   const docs = (folder: string, label = folder) => readdirSync(join(DATA, folder)).map((f) => ({ name: f, content: read(folder, f), label }));
   const rule = { name: "Pc >= 1e-4", pcMin: 1e-4, missDistanceMaxM: null, hoursToTcaMax: null, objectIds: [] };
   it("imports to two events, ignores repeats, alerts only on qualifying CDMs without duplicates", () => {
@@ -201,6 +354,128 @@ describe("last observation (A3)", () => {
 });
 
 describe("CDM history and trend (B1, B2)", () => {
+
+
+it("handles missing Pc values without treating them as zero", () => {
+  const store = new Store();
+
+  store.importDocuments([
+    {
+      name: "cdm_set_1.json",
+      content: read("reconstructed", "cdm_set_1.json"),
+      label: "test",
+    },
+    {
+      name: "cdm_set_4.json",
+      content: read("reconstructed", "cdm_set_4.json"),
+      label: "test",
+    },
+  ]);
+
+  const original = store.getSnapshot().events[0];
+
+  // Simulate a missing source Pc in the second revision.
+  const event = {
+    ...original,
+    revisions: original.revisions.map((revision, index) =>
+      index === 1
+        ? {
+            ...revision,
+            cdm: {
+              ...revision.cdm,
+              pc: null,
+              pcRaw: null,
+            },
+          }
+        : revision
+    ),
+  };
+
+  const timeline = getRevisionChanges(event);
+
+  expect(timeline).toHaveLength(2);
+
+  // Missing Pc must not be interpreted as zero.
+  expect(timeline[1].pc).toBeNull();
+
+  // Comparing a known Pc with a missing Pc is unavailable.
+  expect(timeline[1].pcChange).toBe("n/a");
+
+  // Other revision changes must still be calculated.
+  expect(timeline[1].missDistanceChangeM).not.toBeNull();
+  expect(timeline[1].tcaChangeS).not.toBeNull();
+});
+
+
+it("reports Pc, miss distance and TCA changes in chronological order", () => {
+  const store = new Store();
+
+  store.importDocuments([
+    {
+      name: "cdm_set_4.json",
+      content: read("reconstructed", "cdm_set_4.json"),
+      label: "test",
+    },
+    {
+      name: "cdm_set_1.json",
+      content: read("reconstructed", "cdm_set_1.json"),
+      label: "test",
+    },
+  ]);
+
+  const event = store.getSnapshot().events[0];
+  expect(event.revisions).toHaveLength(2);
+
+  const timeline = getRevisionChanges(event);
+  const [first, second] = timeline;
+
+  // Every revision must appear in the timeline.
+  expect(timeline).toHaveLength(2);
+
+  // Revisions must be ordered by CDM creation date.
+  expect(first.createdAt).toBeLessThanOrEqual(
+    second.createdAt
+  );
+
+  // The first revision has nothing to compare against.
+  expect(first.previousPc).toBeNull();
+  expect(first.pcChange).toBe("n/a");
+  expect(first.missDistanceChangeM).toBeNull();
+  expect(first.tcaChangeS).toBeNull();
+
+  // Verify the changes against the original CDM values.
+  const revisions = [...event.revisions].sort(
+    (a, b) =>
+      a.cdm.creationDate - b.cdm.creationDate ||
+      a.id - b.id
+  );
+
+  const oldCdm = revisions[0].cdm;
+  const newCdm = revisions[1].cdm;
+
+  expect(second.pc).toBe(newCdm.pc);
+  expect(second.previousPc).toBe(oldCdm.pc);
+
+  expect(second.missDistanceChangeM).toBeCloseTo(
+    newCdm.missDistanceM - oldCdm.missDistanceM
+  );
+
+  expect(second.tcaChangeS).toBeCloseTo(
+    (newCdm.tca - oldCdm.tca) / 1000
+  );
+
+  const expectedPcChange =
+    oldCdm.pc === null || newCdm.pc === null
+      ? "n/a"
+      : newCdm.pc > oldCdm.pc
+        ? "higher"
+        : newCdm.pc < oldCdm.pc
+          ? "lower"
+          : "same";
+
+  expect(second.pcChange).toBe(expectedPcChange);
+});
+
   const history = () => {
     const s = new Store();
     s.importDocuments(readdirSync(join(DATA, "reconstructed")).map((f) => ({ name: f, content: read("reconstructed", f), label: "r" })));
@@ -361,6 +636,62 @@ describe("conjunction picture geometry (G4)", () => {
 });
 
 describe("register: archive, filters, sort and paging (D1, G5, G6)", () => {
+
+it("filters and searches 180 events efficiently", () => {
+  const store = new Store();
+
+  // Read synthetic fixtures directly from disk,
+  // since Vitest does not serve browser URLs.
+  const templates = [1, 2, 3].map((n) =>
+    JSON.parse(
+      readFileSync(
+        join(
+          __dirname,
+          `../../../../data/fixtures/synthetic/synthetic_high_risk_${n}.json`
+        ),
+        "utf8"
+      )
+    )
+  );
+
+  // Generate 180 events in three batches.
+  for (let batch = 0; batch < 3; batch++) {
+    const docs = generateScaleDocs(
+      templates,
+      60,
+      Date.now(),
+      batch * 60
+    );
+
+    store.importDocuments(sortByCreation(docs));
+  }
+
+  const events = store.getSnapshot().events;
+
+  expect(events).toHaveLength(180);
+
+  const filters = {
+    ...DEFAULT_FILTERS,
+    query: "SAT",
+  };
+
+  const start = performance.now();
+
+  // Run filtering 100 times.
+  for (let i = 0; i < 100; i++) {
+    getEventListData(
+      events,
+      filters,
+      true,
+      Date.now()
+    );
+  }
+
+  const duration = performance.now() - start;
+
+  expect(duration).toBeLessThan(1000);
+});
+
   const H = 3600000;
   const loaded = () => {
     const s = new Store();

@@ -40,18 +40,64 @@ export function correlate(tcaMs: number, candidates: EventCandidate[], windowS: 
   return { eventId, deltaS: delta, ambiguous: false, note: `revision of event ${eventId} (TCA differs by ${delta.toFixed(3)} s)` };
 }
 
-/** Group (key, sat1, sat2, tca) tuples exactly as incremental ingestion would (tests / offline analysis). */
-export function groupMessages(msgs: [string, string, string, number][], windowS: number): string[][] {
-  const events: { pair: string; tcas: number[]; keys: string[] }[] = [];
-  for (const [key, s1, s2, tca] of msgs) {
-    const pk = pairKey(s1, s2);
-    const cands = events.map((e, i) => ({ eventId: i, tcas: e.tcas, pair: e.pair })).filter((c) => c.pair === pk);
-    const d = correlate(tca, cands, windowS);
-    if (d.eventId === null) events.push({ pair: pk, tcas: [tca], keys: [key] });
-    else {
-      events[d.eventId].tcas.push(tca);
-      events[d.eventId].keys.push(key);
+
+/**
+ * Group CDMs by unordered object pair and connected TCA windows.
+ * The result is independent of message arrival order.
+ */
+export function groupMessages(
+  msgs: [string, string, string, number][],
+  windowS: number
+): string[][] {
+  const parent = msgs.map((_, i) => i);
+
+  function find(i: number): number {
+    if (parent[i] !== i) {
+      parent[i] = find(parent[i]);
+    }
+    return parent[i];
+  }
+
+  function union(a: number, b: number): void {
+    const rootA = find(a);
+    const rootB = find(b);
+
+    if (rootA !== rootB) {
+      parent[rootB] = rootA;
     }
   }
-  return events.map((e) => [...e.keys].sort());
+
+  // Connect messages with matching object pairs
+  // and TCAs within the configured window.
+  for (let i = 0; i < msgs.length; i++) {
+    for (let j = i + 1; j < msgs.length; j++) {
+      const [, a1, a2, tcaA] = msgs[i];
+      const [, b1, b2, tcaB] = msgs[j];
+
+      const samePair =
+        pairKey(a1, a2) === pairKey(b1, b2);
+
+      const withinWindow =
+        Math.abs(tcaA - tcaB) <= windowS * 1000;
+
+      if (samePair && withinWindow) {
+        union(i, j);
+      }
+    }
+  }
+
+  // Collect all connected messages into events.
+  const groups = new Map<number, string[]>();
+
+  msgs.forEach(([key], i) => {
+    const root = find(i);
+    const group = groups.get(root) ?? [];
+
+    group.push(key);
+    groups.set(root, group);
+  });
+
+  return [...groups.values()]
+    .map((group) => group.sort())
+    .sort((a, b) => a[0].localeCompare(b[0]));
 }

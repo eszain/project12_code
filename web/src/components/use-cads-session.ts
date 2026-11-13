@@ -9,8 +9,10 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { analyzeEvent, type EventAnalysis } from "@/lib/cads/analyze";
 import { loadDemoDocuments, loadScaleDocuments, sortByCreation } from "@/lib/cads/demo";
 import { CONFIG, Store, type Snapshot } from "@/lib/cads/store";
+import {IndexedDbEventPersistence,} from "@/lib/cads/event-persistence";
 
 const EMPTY: Snapshot = { events: [], rules: [], alerts: [] };
+const eventPersistence = new IndexedDbEventPersistence();
 export const SCALE_BATCH = 60;
 
 type Doc = { name: string; content: string; label: string };
@@ -18,6 +20,10 @@ const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 export function useCadsSession({ stepDelayMs = 900 }: { stepDelayMs?: number } = {}) {
   const [store] = useState(() => new Store());
+  const [hydrated, setHydrated] = useState(false);
+  const [persistenceError, setPersistenceError] = useState(false);
+  const saveQueue = useRef<Promise<void>>(Promise.resolve());
+  const [archiveOverride, setArchiveOverride] = useState<Record<number, boolean>>({});
   const snap = useSyncExternalStore(store.subscribe, store.getSnapshot, () => EMPTY);
   const [analysis, setAnalysis] = useState<Record<number, EventAnalysis> | null>(null);
   const [status, setStatus] = useState("The table is empty. Press “1. Load data”.");
@@ -32,6 +38,89 @@ export function useCadsSession({ stepDelayMs = 900 }: { stepDelayMs?: number } =
       alive.current = false;
     };
   }, []);
+
+
+useEffect(() => {
+  let cancelled = false;
+
+  async function restoreSession() {
+    try {
+      // IndexedDB is available only in the browser.
+      if (typeof indexedDB === "undefined") {
+        return;
+      }
+
+      const saved = await eventPersistence.load();
+
+      if (cancelled) return;
+
+     if (saved) {
+    store.restoreState(saved.store);
+    setArchiveOverride(saved.archiveOverrides ?? {});
+    setStatus("Previous session restored.");
+  }
+
+    } catch (error) {
+      if (!cancelled) {
+        console.error("Failed to restore CADS session:", error);
+        setPersistenceError(true);
+        setStatus(
+          "Could not restore saved events. Previous data has not been cleared."
+        );
+      }
+    } finally {
+      if (!cancelled) {
+        setNow(Date.now());
+        setHydrated(true);
+      }
+    }
+  }
+
+  void restoreSession();
+
+  return () => {
+    cancelled = true;
+  };
+}, [store]);
+
+
+useEffect(() => {
+  // Do not save until the previous session has loaded.
+  if (!hydrated || persistenceError) return;
+
+  // Avoid recreating storage after a complete reset.
+  if (
+    snap.events.length === 0 &&
+    snap.rules.length === 0 &&
+    snap.alerts.length === 0 &&
+    Object.keys(archiveOverride).length === 0
+  ) {
+    return;
+  }
+
+  const state = {
+    store: store.exportState(),
+    archiveOverrides: { ...archiveOverride },
+  };
+
+  // Save updates in order to prevent older data
+  // from overwriting newer data.
+  saveQueue.current = saveQueue.current
+    .then(() => eventPersistence.save(state))
+    .catch((error) => {
+      console.error("Failed to save CADS session:", error);
+      setPersistenceError(true);
+      setStatus("Could not save dashboard data.");
+    });
+}, [
+  snap,
+  archiveOverride,
+  hydrated,
+  persistenceError,
+  store,
+]);
+
+
 
   const run = async (fn: () => Promise<string> | string) => {
     setBusy(true);
@@ -114,14 +203,31 @@ export function useCadsSession({ stepDelayMs = 900 }: { stepDelayMs?: number } =
     });
 
   /** Clear everything. `after` lets the page clear its own state (selection, filters). */
-  const reset = (after?: () => void) =>
-    run(() => {
-      store.reset();
-      setAnalysis(null);
-      scaleCount.current = 0;
-      after?.();
-      return "Reset. The table is empty.";
-    });
 
-  return { snap, analysis, status, busy, now, loadData, loadFiles, addTestEvents, runAnalysis, reset };
+const reset = (after?: () => void) =>
+  run(async () => {
+    if (!hydrated || persistenceError) {
+      throw new Error(
+        "Storage is not ready. Reset was not performed."
+      );
+    }
+
+    // Finish any previously queued saves.
+    await saveQueue.current;
+
+    // Remove the saved dashboard session.
+    await eventPersistence.clear();
+
+    // Clear the current application state.
+    store.reset();
+    setArchiveOverride({});
+    setAnalysis(null);
+    scaleCount.current = 0;
+    after?.();
+
+    return "Reset. The table is empty.";
+  });
+
+
+  return {snap,analysis,status,busy: busy || !hydrated,hydrated,now,loadData,loadFiles,addTestEvents,runAnalysis,reset,archiveOverride,setArchiveOverride};
 }
