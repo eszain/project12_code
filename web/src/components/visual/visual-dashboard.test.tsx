@@ -193,3 +193,22 @@ it("shows the stored CDM fields unchanged in the specialist view", async () => {
   expect(raw).toContain("COLLISION_PROBABILITY");
   expect(raw).toContain("3.888786E-04");
 });
+
+it("switches to calculations tab and shows LaTeX mathematical formulations", async () => {
+  const user = userEvent.setup();
+  await renderReady();
+  await user.click(screen.getByRole("button", { name: /Load sample data/ }));
+  const [row] = await screen.findAllByRole("button", { name: /Select .*Severity/ });
+  await user.click(row);
+
+  const calcButton = screen.getByRole("button", { name: "Calculations" });
+  expect(calcButton).toBeTruthy();
+  expect(calcButton.getAttribute("aria-pressed")).toBe("false");
+
+  await user.click(calcButton);
+  expect(calcButton.getAttribute("aria-pressed")).toBe("true");
+  expect(screen.getByTestId("calculations-math-view")).toBeTruthy();
+  expect(screen.getByText("Mathematical Calculations & Formulations")).toBeTruthy();
+  expect(screen.getByText(/1\. Encounter Geometry & Relative Motion/)).toBeTruthy();
+  expect(screen.getByText(/4\. 2D Probability of Collision/)).toBeTruthy();
+});

@@ -12,6 +12,7 @@ import { useId, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
 import { Pause, Play, RotateCcw, Undo2, Zap } from "lucide-react";
+import { motion } from "motion/react";
 
 import { Button } from "@/components/animate-ui/components/buttons/button";
 import { formatSpeed } from "@/lib/cads/analyze";
@@ -161,6 +162,16 @@ export function ConjunctionPlayer({ event }: { event: CdmEvent }) {
   const shownSlower = Math.round(slowdown(track, PLAY_SECONDS / speed));
   const atClosest = mode === "real" && Math.abs(progress - 0.5) < 0.02;
 
+  const speedKmS = `${(track.speedMs / 1000).toFixed(1)} km/s`;
+  const speedKmH = `${Math.round(track.speedMs * 3.6).toLocaleString("en-US")} km/h`;
+  const timeDeltaS = (progress - 0.5) * track.realDurationS;
+  const timeDeltaLabel =
+    timeDeltaS < -0.05
+      ? `${timeDeltaS.toFixed(1)} s to TCA`
+      : timeDeltaS > 0.05
+        ? `+${timeDeltaS.toFixed(1)} s past TCA`
+        : "TCA";
+
   const phase = burst ? "impact" : progress >= end ? "end" : playing ? "playing" : progress === 0 ? "start" : "paused";
   const announcement = {
     start: "Ready. Press play to watch the pass.",
@@ -205,6 +216,15 @@ export function ConjunctionPlayer({ event }: { event: CdmEvent }) {
             </g>
           )}
 
+          {!burst && mode === "real" && (
+            <g className="player-range-vector">
+              <line x1={CX} y1={CY} x2={sx} y2={sy} className="player-range-line" />
+              <text x={(CX + sx) / 2} y={(CY + sy) / 2 - 8} textAnchor="middle" className="player-range-text">
+                range: {metres(gap)}
+              </text>
+            </g>
+          )}
+
           {!burst && (
             <g transform={`translate(${CX} ${CY})`} className="player-primary">
               <rect x={-16} y={-3} width={10} height={6} />
@@ -223,8 +243,25 @@ export function ConjunctionPlayer({ event }: { event: CdmEvent }) {
               <text x={Math.min(Math.max(sx, LABEL_EDGE), W - LABEL_EDGE) - sx} y={-14} textAnchor="middle" className="player-label">
                 {secondary}
               </text>
+              <text x={Math.min(Math.max(sx, LABEL_EDGE), W - LABEL_EDGE) - sx} y={20} textAnchor="middle" className="player-speed-label">
+                {speedKmS} · {metres(gap)}
+              </text>
             </g>
           )}
+
+          <g className="player-hud" transform="translate(18, 18)" aria-hidden="true">
+            <rect x={0} y={0} width={180} height={68} rx={6} className="player-hud-bg" />
+            <text x={10} y={16} className="player-hud-title">LIVE TELEMETRY</text>
+            <text x={10} y={32} className="player-hud-row">
+              Speed: <tspan className="player-hud-val">{speedKmS}</tspan> ({speedKmH})
+            </text>
+            <text x={10} y={48} className="player-hud-row">
+              Separation: <tspan className="player-hud-val">{metres(gap)}</tspan>
+            </text>
+            <text x={10} y={62} className="player-hud-row">
+              TCA Offset: <tspan className="player-hud-val">{timeDeltaLabel}</tspan>
+            </text>
+          </g>
 
           <g className="player-burst" visibility={burst ? "visible" : "hidden"} aria-hidden="true">
             <circle cx={CX} cy={CY} r={4} className="player-flash" />
@@ -294,10 +331,16 @@ export function ConjunctionPlayer({ event }: { event: CdmEvent }) {
 
 function Banner({ verdict, line }: { verdict: ReturnType<typeof passVerdict>; line: string }) {
   return (
-    <div className="player-banner">
+    <motion.div
+      key={`${verdict.tone}-${verdict.headline}`}
+      initial={{ opacity: 0, y: 3 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.18 }}
+      className="player-banner"
+    >
       <strong>{verdict.headline}</strong>
       <span>{verdict.action}</span>
       <p>{line}</p>
-    </div>
+    </motion.div>
   );
 }

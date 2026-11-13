@@ -95,3 +95,11 @@ it("still plays when reduced motion is on, and shows the burst without flying pa
   const particle = container.querySelector(".player-particle")!;
   expect(Number(particle.getAttribute("cx"))).not.toBe(400); // already spread out, not flying from the centre
 });
+
+it("displays moving speed labels, telemetry HUD, and separation range vector", () => {
+  render(<ConjunctionPlayer event={highRisk()} />);
+  expect(screen.getByText("LIVE TELEMETRY")).toBeTruthy();
+  expect(screen.getByText(/Speed:/)).toBeTruthy();
+  expect(screen.getByText(/Separation:/)).toBeTruthy();
+  expect(screen.getByText(/range:/)).toBeTruthy();
+});
