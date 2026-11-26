@@ -9,7 +9,7 @@ export const MU = 398600.4418;
 export const EARTH_RADIUS_KM = 6378.137;
 const INERTIAL = new Set(["GCRF", "ICRF", "EME2000", "J2000", "TOD", "MOD", "TEME", "ECI"]);
 
-const isEarthFixed = (f: string | null) => {
+export const isEarthFixed = (f: string | null) => {
   const x = (f ?? "").toUpperCase().replace(/ /g, "");
   return x.startsWith("ITRF") || ["ECEF", "EFG", "WGS84"].includes(x);
 };
