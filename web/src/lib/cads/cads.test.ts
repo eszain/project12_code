@@ -256,7 +256,7 @@ it("keeps the same event groups when CDMs arrive in any order", () => {
 
     expect(groups).toEqual(expected);
   }
-});
+}, 30_000); // 720 arrival orders through the full store: allow for a busy test run
 
   const docs = (folder: string, label = folder) => readdirSync(join(DATA, folder)).map((f) => ({ name: f, content: read(folder, f), label }));
   const rule = { name: "Pc >= 1e-4", pcMin: 1e-4, missDistanceMaxM: null, hoursToTcaMax: null, objectIds: [] };
