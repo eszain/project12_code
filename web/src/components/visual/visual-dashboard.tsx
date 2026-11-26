@@ -48,6 +48,7 @@ import { ExplanationCard } from "@/components/explanation-card";
 import { CalculationDetails } from "@/components/calculation-details";
 import { CalculationsMathView } from "@/components/visual/calculations-math-view";
 import { ConjunctionPlayer } from "@/components/visual/conjunction-player";
+import { ConjunctionGlobe } from "@/components/visual/conjunction-globe";
 import { ImportReportSheet } from "@/components/import-report-sheet";
 import { OriginalCdm } from "@/components/original-cdm";
 import { useCadsSession } from "@/components/use-cads-session";
@@ -605,6 +606,7 @@ export function VisualDashboard({
             ) : (
               <div data-testid="selected-player">
                 <ConjunctionPlayer key={`${event.id}-${current.messageKey}`} event={event} />
+                <ConjunctionGlobe key={`globe-${event.id}-${current.messageKey}`} event={event} />
               </div>
             )}
           </main>
