@@ -42,3 +42,6 @@ next-env.d.ts
 
 .vercel
 .env*
+
+# CesiumJS build copied from node_modules by scripts/copy-cesium.mjs
+/public/cesium/
