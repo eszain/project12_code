@@ -89,7 +89,7 @@ export function CalculationDetails({
       <p>Tracking is not exact, so each position has a “cloud” of uncertainty. The 1σ values below are the size of that cloud in each direction.</p>
 
       <div className="math-latex-block">
-        <Latex math="\\sigma_{\\text{RSS}} = \\sqrt{\\sigma_{\\text{radial}}^2 + \\sigma_{\\text{in-track}}^2 + \\sigma_{\\text{cross-track}}^2}" block />
+        <Latex math="\sigma_{\text{RSS}} = \sqrt{\sigma_{\text{radial}}^2 + \sigma_{\text{in-track}}^2 + \sigma_{\text{cross-track}}^2}" block />
       </div>
 
       {d.objects.length ? (
@@ -123,7 +123,7 @@ export function CalculationDetails({
 
       <h3 className="calc-step">Step 3. Miss distance against uncertainty (Encounter Plane Ratio)</h3>
       <div className="math-latex-block">
-        <Latex math="\\text{Ratio} = \\frac{d_{\\text{encounter}}}{\\sigma_{\\text{along\\_miss}}}" block />
+        <Latex math="\text{Ratio} = \frac{d_{\text{encounter}}}{\sigma_{\text{along\_miss}}}" block />
       </div>
 
       {d.missVsUncertainty.available ? (
@@ -147,7 +147,7 @@ export function CalculationDetails({
       <h3 className="calc-step">Step 4. Our own check of the collision chance (2D Foster Integral)</h3>
       <div className="math-latex-block">
         <Latex
-          math="P_c = \\frac{1}{2\\pi \\sqrt{\\det(\\mathbf{C}_{2\\text{D}})}} \\iint_{\\|\\vec{r}\\| \\le R_{\\text{HBR}}} \\exp\\left( -\\frac{1}{2} \\vec{r}^T \\mathbf{C}_{2\\text{D}}^{-1} \\vec{r} \\right) dA"
+          math="P_c = \frac{1}{2\pi \sqrt{\det(\mathbf{C}_{2\text{D}})}} \iint_{\|\vec{r}\| \le R_{\text{HBR}}} \exp\left( -\frac{1}{2} \vec{r}^T \mathbf{C}_{2\text{D}}^{-1} \vec{r} \right) dA"
           block
         />
       </div>
