@@ -212,6 +212,26 @@ h3.ops-title { cursor: default; }
 .cads-details-scroll .ops-charts figure { min-width: 0; overflow: hidden; }
 .cads-details-scroll .katex-display { max-width: 100%; overflow-x: auto; overflow-y: hidden; padding-bottom: .25rem; }
 .cads-details-scroll .calc-panel p, .cads-details-scroll .calc-panel li { overflow-wrap: anywhere; }
+.math-standalone-panel { display: grid; gap: 0.85rem; }
+.math-latex-block {
+  background: rgba(3, 10, 20, 0.7);
+  border: 1px solid rgba(151, 218, 255, 0.12);
+  border-radius: 0.5rem;
+  padding: 0.6rem 0.85rem;
+  margin: 0.5rem 0;
+  overflow-x: auto;
+}
+.math-latex-subblock {
+  background: rgba(3, 10, 20, 0.5);
+  border: 1px solid rgba(151, 218, 255, 0.08);
+  border-radius: 0.375rem;
+  padding: 0.4rem 0.65rem;
+  margin: 0.35rem 0;
+  overflow-x: auto;
+}
+.math-matrix-block { margin: 0.75rem 0; }
+.math-matrix-caption { font-size: 0.75rem; font-weight: 600; color: #a9c5dc; margin-bottom: 0.25rem; }
+.math-latex-matrix { overflow-x: auto; margin-bottom: 0.5rem; }
 
 /* Near-miss player in the centre of /dashboard (issue #4). Tone colours follow the severity dots. */
 .player { --tone: #9cb5ca; display: grid; gap: .85rem; max-width: 60rem; margin: 0 auto; }
@@ -219,10 +239,31 @@ h3.ops-title { cursor: default; }
 .player.tone-caution { --tone: #ffc857; }
 .player.tone-safe { --tone: #46e0a0; }
 .player-title { font-size: 1.1rem; font-weight: 600; overflow-wrap: anywhere; }
-.player-banner { border: 1px solid var(--tone); border-left-width: 6px; border-radius: .5rem; background: color-mix(in srgb, var(--tone) 12%, transparent); display: grid; gap: .15rem; padding: .75rem 1rem; }
-.player-banner strong { color: var(--tone); font-size: 1.35rem; line-height: 1.2; }
-.player-banner span { font-weight: 600; }
-.player-banner p { color: #b9cde0; font-size: .9rem; }
+.player-banner {
+  border: 1px solid var(--tone);
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, var(--tone) 10%, rgba(2, 6, 12, 0.7));
+  display: grid;
+  gap: 0.3rem;
+  padding: 0.85rem 1.15rem;
+}
+.player-banner strong {
+  color: var(--tone);
+  font-size: 1.2rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+.player-banner span {
+  color: #f1f7fd;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.player-banner p {
+  color: #b0c7dc;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  margin: 0;
+}
 .player-whatif { border: 1px dashed #ffc857; border-radius: .5rem; color: #ffe2a3; font-size: .9rem; padding: .5rem .75rem; }
 .player-stage { background: #02060d; border: 1px solid rgba(151, 218, 255, .16); border-radius: .75rem; overflow: hidden; }
 .player-svg { display: block; height: auto; width: 100%; }
@@ -235,6 +276,13 @@ h3.ops-title { cursor: default; }
 .player-cloud-stop { stop-color: var(--tone); }
 .player-secondary { fill: var(--tone); stroke: #fff; stroke-width: 1; }
 .player-label { fill: #b9cde0; font-size: 13px; }
+.player-speed-label { fill: #7be1ff; font-size: 11px; font-weight: 600; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; paint-order: stroke; stroke: #02060d; stroke-width: 2.5px; stroke-linejoin: round; }
+.player-range-line { stroke: rgba(110, 224, 255, 0.35); stroke-dasharray: 4 4; stroke-width: 1; }
+.player-range-text { fill: #a5d8f6; font-size: 11px; font-weight: 500; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; paint-order: stroke; stroke: #02060d; stroke-width: 3px; stroke-linejoin: round; }
+.player-hud-bg { fill: rgba(4, 12, 22, 0.78); stroke: rgba(151, 218, 255, 0.18); stroke-width: 1; }
+.player-hud-title { fill: #6ee0ff; font-size: 9px; font-weight: 700; letter-spacing: 0.12em; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.player-hud-row { fill: #8ca5bd; font-size: 10px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.player-hud-val { fill: #ffffff; font-weight: 600; }
 .player-flash { fill: #fff3c4; }
 .player-particle { fill: #ffb347; }
 .player-whatif-label { fill: #ffc857; font-size: 15px; font-weight: 700; letter-spacing: .08em; }

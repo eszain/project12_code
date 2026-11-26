@@ -46,6 +46,7 @@ import { EventSummaryCard } from "@/components/event-summary-card";
 import { CdmHistory } from "@/components/cdm-history";
 import { ExplanationCard } from "@/components/explanation-card";
 import { CalculationDetails } from "@/components/calculation-details";
+import { CalculationsMathView } from "@/components/visual/calculations-math-view";
 import { ConjunctionPlayer } from "@/components/visual/conjunction-player";
 import { ImportReportSheet } from "@/components/import-report-sheet";
 import { OriginalCdm } from "@/components/original-cdm";
@@ -261,7 +262,7 @@ export function VisualDashboard({
 
   const [selected, setSelected] = useState<number | null>(null);
 
-  const [view, setView] = useState<"operator" | "specialist">(
+  const [view, setView] = useState<"operator" | "specialist" | "calculations">(
     "operator"
   );
 
@@ -700,6 +701,24 @@ export function VisualDashboard({
                     >
                       Specialist
                     </button>
+
+                    <button
+                      type="button"
+                      className="view-option"
+                      aria-pressed={view === "calculations"}
+                      onClick={() => setView("calculations")}
+                      onKeyDown={(keyboardEvent) => {
+                        if (
+                          keyboardEvent.key === "Enter" ||
+                          keyboardEvent.key === " "
+                        ) {
+                          keyboardEvent.preventDefault();
+                          setView("calculations");
+                        }
+                      }}
+                    >
+                      Calculations
+                    </button>
                   </div>
 
                   <EventSummaryCard
@@ -709,7 +728,7 @@ export function VisualDashboard({
                     selected
                     onSelect={() => selectEvent(event.id)}
                     onOpenDetails={openSpecialist}
-                    view={view}
+                    view={view === "operator" ? "operator" : "specialist"}
                     cautiousLanguage
                   />
 
@@ -731,6 +750,10 @@ export function VisualDashboard({
 
                       <OriginalCdm raw={current.raw} />
                     </>
+                  )}
+
+                  {view === "calculations" && (
+                    <CalculationsMathView event={event} />
                   )}
                 </div>
               )}

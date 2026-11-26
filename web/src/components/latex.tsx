@@ -14,6 +14,7 @@ export function Latex({ math, block = false, className = "" }: LatexProps) {
     try {
       return katex.renderToString(math, {
         displayMode: block,
+        output: "html",
         throwOnError: false,
       });
     } catch {
