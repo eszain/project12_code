@@ -292,3 +292,14 @@ h3.ops-title { cursor: default; }
 .player-speeds { display: flex; gap: .25rem; margin-right: auto; }
 .player-whatif-button { border-color: #ffc857; color: #ffe2a3; }
 .player-note { color: #8ca5bd; font-size: .8rem; }
+
+/* 3D view under the near-miss player (issue #26). CesiumJS draws into .globe-canvas. */
+.globe { display: grid; gap: .75rem; margin: 1.5rem auto 0; max-width: 60rem; }
+.globe-head { align-items: baseline; display: flex; flex-wrap: wrap; gap: .5rem 1rem; justify-content: space-between; }
+.globe-title { font-size: 1.05rem; font-weight: 600; }
+.globe-note { color: #8ca5bd; font-size: .78rem; }
+.globe-stage { background: #02060d; border: 1px solid rgba(151, 218, 255, .16); border-radius: .75rem; height: min(28rem, 70vw); min-height: 16rem; overflow: hidden; position: relative; }
+.globe-canvas { inset: 0; position: absolute; }
+.globe-overlay { align-items: center; color: #b9cde0; display: flex; inset: 0; justify-content: center; padding: 1rem; position: absolute; text-align: center; }
+.globe-readout { color: #b9cde0; font-size: .85rem; font-variant-numeric: tabular-nums; }
+.globe-unavailable { border: 1px dashed rgba(151, 218, 255, .25); border-radius: .5rem; color: #9cb5ca; font-size: .9rem; padding: .75rem 1rem; }

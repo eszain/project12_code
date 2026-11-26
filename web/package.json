@@ -3,7 +3,10 @@
   "version": "0.3.0-beta",
   "private": true,
   "scripts": {
+    "postinstall": "node scripts/copy-cesium.mjs",
+    "predev": "node scripts/copy-cesium.mjs",
     "dev": "next dev",
+    "prebuild": "node scripts/copy-cesium.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
@@ -16,6 +19,7 @@
     "@react-three/drei": "^10.7.9",
     "@react-three/fiber": "^9.8.2",
     "@types/katex": "^0.16.8",
+    "cesium": "1.147.0",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.5.2",
     "gsap": "^3.15.1",
