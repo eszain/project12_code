@@ -44,6 +44,11 @@ export interface AlertRule {
   hoursToTcaMax: number | null;
   objectIds: string[];
 }
+export interface NotificationAcknowledgement {
+  acknowledgedBy: string;
+  acknowledgedAt: number;
+  note: string | null;
+}
 export interface AlertOccurrence {
   id: number;
   createdAt: number;
@@ -56,6 +61,7 @@ export interface AlertOccurrence {
   message: Record<string, unknown>;
   ruleVersion?: number;
   superseded?: boolean;
+  acknowledgement?: NotificationAcknowledgement;
 }
 
 export interface RuleChange {
@@ -506,8 +512,12 @@ export class Store {
     let created = 0;
     for (const rule of this.rules) {
       const { matches, reasons } = evaluateRule(rule, rev.cdm);
-      if (!matches || this.alerts.some((a) => a.ruleId === rule.id && a.revisionId === rev.id && !a.superseded)) continue; // one alert per rule per CDM
-      const c = rev.cdm;
+      if (!matches || this.alerts.some(
+        (a) =>
+          a.ruleId === rule.id &&
+          a.revisionId === rev.id &&
+          !a.superseded
+      )) continue;      const c = rev.cdm;
       const severity = severityOf(c.pc);
       this.alerts.unshift({
         id: this.ids.alert++,
@@ -540,5 +550,47 @@ export class Store {
       created++;
     }
     return created;
+  }
+
+  acknowledgeNotification(
+    alertId: number,
+    acknowledgedBy: string,
+    note?: string,
+    acknowledgedAt = Date.now()
+  ): boolean {
+    const operator = acknowledgedBy.trim();
+  
+    if (!operator) {
+      throw new Error("Operator name is required.");
+    }
+  
+    const alert = this.alerts.find(
+      (item) => item.id === alertId
+    );
+  
+    if (!alert) {
+      throw new Error("Notification not found.");
+    }
+  
+    if (alert.acknowledgement) {
+      return false;
+    }
+  
+    this.alerts = this.alerts.map((item) =>
+      item.id === alertId
+        ? {
+            ...item,
+            acknowledgement: {
+              acknowledgedBy: operator,
+              acknowledgedAt,
+              note: note?.trim() || null,
+            },
+          }
+        : item
+    );
+  
+    this.commit();
+  
+    return true;
   }
 }

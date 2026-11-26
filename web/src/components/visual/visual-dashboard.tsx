@@ -30,14 +30,7 @@ import {
   SidebarTrigger,
 } from "@/components/animate-ui/components/radix/sidebar";
 
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/animate-ui/components/radix/sheet";
-
+import { NotificationsSheet } from "@/components/visual/notifications-sheet";
 import { OutboxSheet } from "@/components/visual/outbox-sheet";
 import { useOutbox } from "@/components/visual/use-outbox";
 import { RuleEditor } from "@/components/visual/rule-editor";
@@ -54,10 +47,13 @@ import { useCadsSession } from "@/components/use-cads-session";
 import { hoursBetween } from "@/lib/cads/time";
 
 import {
+  countUnacknowledgedAlerts,
+} from "@/lib/cads/notification-acknowledgement";
+
+import {
   latestRevision,
   severityOf,
   isNotificationPaused,
-  type AlertOccurrence,
   type CdmEvent,
   type Severity,
 } from "@/lib/cads/store";
@@ -73,7 +69,9 @@ const severityLabel: Record<Severity, string> = {
 function eventTitle(event: CdmEvent) {
   const cdm = latestRevision(event).cdm;
 
-  return `${cdm.sat1.name ?? cdm.sat1.designator} / ${cdm.sat2.name ?? cdm.sat2.designator}`;
+  return `${cdm.sat1.name ?? cdm.sat1.designator} / ${
+    cdm.sat2.name ?? cdm.sat2.designator
+  }`;
 }
 
 function formatTca(hours: number) {
@@ -155,95 +153,6 @@ function EventRow({
   );
 }
 
-function NotificationsSheet({
-  alerts,
-  events,
-  open,
-  onOpenChange,
-  onSelect,
-}: {
-  alerts: AlertOccurrence[];
-  events: CdmEvent[];
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onSelect: (id: number) => void;
-}) {
-  return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        side="left"
-        className="w-[28rem] max-w-[90vw]"
-      >
-        <SheetHeader>
-          <SheetTitle>Notifications</SheetTitle>
-
-          <SheetDescription>
-            {alerts.length} recorded alert
-            {alerts.length === 1 ? "" : "s"}.
-            Local notifications only; no external messages are sent.
-          </SheetDescription>
-        </SheetHeader>
-
-        <div
-          className="flex-1 space-y-2 overflow-y-auto px-4 pb-4"
-          aria-label="Recent alerts"
-        >
-          {alerts.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No alerts yet. Load sample data to evaluate
-              the default rule.
-            </p>
-          ) : (
-            alerts.map((alert) => {
-              const event = events.find(
-                (item) => item.id === alert.eventId
-              );
-
-              return (
-                <article
-                  key={alert.id}
-                  className="rounded-lg border p-3"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-semibold">
-                      {alert.ruleName}
-                    </p>
-
-                    <span className="text-xs font-medium text-amber-700">
-                      {alert.severity}
-                    </span>
-                  </div>
-
-                  <p className="mt-1 text-sm">
-                    {event
-                      ? eventTitle(event)
-                      : `Event ${alert.eventId}`}
-                  </p>
-
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {alert.matched.join("; ")}
-                  </p>
-
-                  <button
-                    type="button"
-                    className="mt-2 text-sm underline underline-offset-2"
-                    onClick={() => {
-                      onSelect(alert.eventId);
-                      onOpenChange(false);
-                    }}
-                  >
-                    View event
-                  </button>
-                </article>
-              );
-            })
-          )}
-        </div>
-      </SheetContent>
-    </Sheet>
-  );
-}
-
 export function VisualDashboard({
   stepDelayMs = 900,
 }: {
@@ -262,9 +171,9 @@ export function VisualDashboard({
 
   const [selected, setSelected] = useState<number | null>(null);
 
-  const [view, setView] = useState<"operator" | "specialist" | "calculations">(
-    "operator"
-  );
+  const [view, setView] = useState<
+    "operator" | "specialist" | "calculations"
+  >("operator");
 
   const [reportOpen, setReportOpen] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
@@ -309,6 +218,9 @@ export function VisualDashboard({
       !alert.superseded &&
       !isPaused(alert.eventId)
   );
+
+  const unacknowledgedCount =
+    countUnacknowledgedAlerts(activeAlerts);
 
   const current = event
     ? latestRevision(event).cdm
@@ -375,17 +287,17 @@ export function VisualDashboard({
               <button
                 type="button"
                 className="relative rounded-md p-2 hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2"
-                aria-label={`Open notifications (${activeAlerts.length})`}
+                aria-label={`Open notifications (${unacknowledgedCount})`}
                 onClick={() => setNotificationsOpen(true)}
               >
                 <Bell className="size-4" />
 
-                {activeAlerts.length > 0 && (
+                {unacknowledgedCount > 0 && (
                   <span
                     className="absolute -right-1 -top-1 rounded-full bg-amber-600 px-1 text-[10px] text-white"
                     aria-hidden="true"
                   >
-                    {activeAlerts.length}
+                    {unacknowledgedCount}
                   </span>
                 )}
               </button>
@@ -498,6 +410,7 @@ export function VisualDashboard({
                     onClick={() => setReportOpen(true)}
                     disabled={!importReport}
                     tooltip="View import report"
+                    aria-label="View import report"
                   >
                     <FileText />
                     <span>View import report</span>
@@ -507,9 +420,9 @@ export function VisualDashboard({
             </SidebarGroupContent>
 
             <p
-              className="cads-sidebar-status"
+              className="cads-sidebar-state"
               role={
-                status.startsWith("Error:")
+                status.toLowerCase().includes("error")
                   ? "alert"
                   : "status"
               }
@@ -600,11 +513,16 @@ export function VisualDashboard({
 
             {!event || !current ? (
               <div className="cads-player-empty">
-                <p>Choose an event in the left list to play its pass.</p>
+                <p>
+                  Choose an event in the left list to play its pass.
+                </p>
               </div>
             ) : (
               <div data-testid="selected-player">
-                <ConjunctionPlayer key={`${event.id}-${current.messageKey}`} event={event} />
+                <ConjunctionPlayer
+                  key={`${event.id}-${current.messageKey}`}
+                  event={event}
+                />
               </div>
             )}
           </main>
@@ -645,6 +563,7 @@ export function VisualDashboard({
                   aria-label="Manage event notifications"
                 >
                   <BellOff className="size-4" />
+
                   {isPaused(event.id)
                     ? "Notifications paused — manage"
                     : "Mute / Snooze notifications"}
@@ -728,7 +647,11 @@ export function VisualDashboard({
                     selected
                     onSelect={() => selectEvent(event.id)}
                     onOpenDetails={openSpecialist}
-                    view={view === "operator" ? "operator" : "specialist"}
+                    view={
+                      view === "operator"
+                        ? "operator"
+                        : "specialist"
+                    }
                     cautiousLanguage
                   />
 
@@ -770,6 +693,7 @@ export function VisualDashboard({
         open={notificationsOpen}
         onOpenChange={setNotificationsOpen}
         onSelect={selectEvent}
+        onAcknowledge={session.acknowledgeNotification}
       />
 
       {event && (

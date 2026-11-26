@@ -408,6 +408,24 @@ export function useCadsSession(
     };
   }, [hydrated, store]);
 
+  const acknowledgeNotification = (
+    alertId: number,
+    acknowledgedBy: string,
+    note?: string
+  ): boolean => {
+    if (!hydratedRef.current || persistenceError) {
+      throw new Error(
+        "Notification storage is not ready."
+      );
+    }
+  
+    return store.acknowledgeNotification(
+      alertId,
+      acknowledgedBy,
+      note
+    );
+  };
+
   const createRule = (
     rule: Omit<AlertRule, "id">
   ) => store.addRule(rule);
@@ -420,25 +438,26 @@ export function useCadsSession(
   const deleteRule = (id: number) =>
     store.deleteRule(id);
 
-  return {
-    createRule,
-    updateRule,
-    deleteRule,
-    pauseNotifications,
-    resumeNotifications,
-    snap,
-    analysis,
-    status,
-    importReport,
-    busy,
-    hydrated,
-    now,
-    loadData,
-    loadFiles,
-    addTestEvents,
-    runAnalysis,
-    reset,
-    archiveOverride,
-    setArchiveOverride,
-  };
+    return {
+      createRule,
+      updateRule,
+      deleteRule,
+      acknowledgeNotification,
+      pauseNotifications,
+      resumeNotifications,
+      snap,
+      analysis,
+      status,
+      importReport,
+      busy,
+      hydrated,
+      now,
+      loadData,
+      loadFiles,
+      addTestEvents,
+      runAnalysis,
+      reset,
+      archiveOverride,
+      setArchiveOverride,
+    };
 }
