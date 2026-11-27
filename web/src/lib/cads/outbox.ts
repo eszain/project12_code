@@ -1,5 +1,5 @@
-
 import type { AlertOccurrence } from "./store";
+import { getNotificationHandler, resolveNotificationHandlerIds, type NotificationHandlerId } from "./notification-handlers";
 
 export type DeliveryStatus =
   | "pending"
@@ -18,12 +18,13 @@ export type OutboxEntry = {
   alertId: number;
   eventId: number;
   ruleName: string;
-  channel: "local";
+  channel: NotificationHandlerId;
   status: DeliveryStatus;
   attempts: number;
   createdAt: number;
   updatedAt: number;
   logs: DeliveryLog[];
+  alert?: AlertOccurrence;
 };
 
 export function enqueueAlerts(
@@ -38,38 +39,41 @@ export function enqueueAlerts(
   for (const alert of alerts) {
     if (alert.superseded) continue;
 
-    const id = `local:alert:${alert.id}`;
+    for (const channel of resolveNotificationHandlerIds(alert.handlerIds)) {
+      const id = `${channel}:alert:${alert.id}`;
 
-    if (known.has(id)) continue;
+      if (known.has(id)) continue;
 
-    known.add(id);
+      known.add(id);
 
-    const suppressed = pausedEventIds.has(alert.eventId);
+      const suppressed = pausedEventIds.has(alert.eventId);
 
-    const status: DeliveryStatus = suppressed
-      ? "suppressed"
-      : "pending";
+      const status: DeliveryStatus = suppressed
+        ? "suppressed"
+        : "pending";
 
-    next.unshift({
-      id,
-      alertId: alert.id,
-      eventId: alert.eventId,
-      ruleName: alert.ruleName,
-      channel: "local",
-      status,
-      attempts: 0,
-      createdAt: at,
-      updatedAt: at,
-      logs: [
-        {
-          at,
-          status,
-          detail: suppressed
-            ? "Event muted or snoozed at enqueue time"
-            : "Queued for local delivery",
-        },
-      ],
-    });
+      next.unshift({
+        id,
+        alertId: alert.id,
+        eventId: alert.eventId,
+        ruleName: alert.ruleName,
+        channel,
+        status,
+        attempts: 0,
+        createdAt: at,
+        updatedAt: at,
+        alert: structuredClone(alert),
+        logs: [
+          {
+            at,
+            status,
+            detail: suppressed
+              ? "Event muted or snoozed at enqueue time"
+              : `Queued for ${channel} delivery`,
+          },
+        ],
+      });
+    }
   }
 
   return next;
@@ -106,9 +110,30 @@ export function deliverOutbox(
       };
     }
 
-    const status: DeliveryStatus = fail
-      ? "failed"
-      : "sent";
+    let status: DeliveryStatus = "sent";
+    let detail: string;
+
+    try {
+      if (fail) {
+        throw new Error("Simulated delivery failure");
+      }
+
+      if (!entry.alert) {
+        throw new Error("Alert payload is unavailable");
+      }
+
+      const handler = getNotificationHandler(entry.channel);
+      const result = handler.send(entry.alert);
+
+      detail = entry.channel === "local"
+        ? `Recorded in local channel (no external message sent): ${result}`
+        : `Recorded by ${handler.label} (no external message sent): ${result}`;
+    } catch (error) {
+      status = "failed";
+      detail = error instanceof Error
+        ? error.message
+        : String(error);
+    }
 
     return {
       ...entry,
@@ -119,9 +144,7 @@ export function deliverOutbox(
         {
           at,
           status,
-          detail: fail
-            ? "Simulated delivery failure"
-            : "Recorded in local channel (no external message sent)",
+          detail,
         },
         ...entry.logs,
       ],
@@ -179,7 +202,28 @@ export function synchronizeOutbox(
       .map((alert) => alert.id),
   );
 
+  const alertsById = new Map(
+    alerts.map((alert) => [alert.id, alert]),
+  );
+
   return entries.map((entry) => {
+    const alert = alertsById.get(entry.alertId);
+
+    if (alert && !entry.alert) {
+      entry = {
+        ...entry,
+        alert: structuredClone(alert),
+      };
+    }
+
+    if (alert && entry.eventId !== alert.eventId) {
+      entry = {
+        ...entry,
+        eventId: alert.eventId,
+        alert: structuredClone(alert),
+      };
+    }
+
     if (entry.status !== "pending") return entry;
 
     const reason = !activeAlerts.has(entry.alertId)

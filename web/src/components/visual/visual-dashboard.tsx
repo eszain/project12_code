@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -31,18 +30,12 @@ import {
 } from "@/components/animate-ui/components/radix/sidebar";
 
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/animate-ui/components/radix/sheet";
-import {
   Tabs,
   TabsList,
   TabsTrigger,
 } from "@/components/animate-ui/components/radix/tabs";
 
+import { NotificationsSheet } from "@/components/visual/notifications-sheet";
 import { OutboxSheet } from "@/components/visual/outbox-sheet";
 import { useOutbox } from "@/components/visual/use-outbox";
 import { RuleEditor } from "@/components/visual/rule-editor";
@@ -63,10 +56,13 @@ import { UserSwitcher } from "@/components/visual/user-switcher";
 import { MOCK_USERS, visibleEvents } from "@/lib/cads/subscriptions";
 
 import {
+  countUnacknowledgedAlerts,
+} from "@/lib/cads/notification-acknowledgement";
+
+import {
   latestRevision,
   severityOf,
   isNotificationPaused,
-  type AlertOccurrence,
   type CdmEvent,
   type Severity,
 } from "@/lib/cads/store";
@@ -161,95 +157,6 @@ function EventRow({
         </div>
       </SidebarMenuButton>
     </SidebarMenuItem>
-  );
-}
-
-function NotificationsSheet({
-  alerts,
-  events,
-  open,
-  onOpenChange,
-  onSelect,
-}: {
-  alerts: AlertOccurrence[];
-  events: CdmEvent[];
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onSelect: (id: number) => void;
-}) {
-  return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        side="left"
-        className="w-[28rem] max-w-[90vw]"
-      >
-        <SheetHeader>
-          <SheetTitle>Notifications</SheetTitle>
-
-          <SheetDescription>
-            {alerts.length} recorded alert
-            {alerts.length === 1 ? "" : "s"}.
-            Local notifications only; no external messages are sent.
-          </SheetDescription>
-        </SheetHeader>
-
-        <div
-          className="flex-1 space-y-2 overflow-y-auto px-4 pb-4"
-          aria-label="Recent alerts"
-        >
-          {alerts.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No alerts yet. Load sample data to evaluate
-              the default rule.
-            </p>
-          ) : (
-            alerts.map((alert) => {
-              const event = events.find(
-                (item) => item.id === alert.eventId
-              );
-
-              return (
-                <article
-                  key={alert.id}
-                  className="rounded-lg border p-3"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-semibold">
-                      {alert.ruleName}
-                    </p>
-
-                    <span className="text-xs font-medium text-amber-700">
-                      {alert.severity}
-                    </span>
-                  </div>
-
-                  <p className="mt-1 text-sm">
-                    {event
-                      ? eventTitle(event)
-                      : `Event ${alert.eventId}`}
-                  </p>
-
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {alert.matched.join("; ")}
-                  </p>
-
-                  <button
-                    type="button"
-                    className="mt-2 text-sm underline underline-offset-2"
-                    onClick={() => {
-                      onSelect(alert.eventId);
-                      onOpenChange(false);
-                    }}
-                  >
-                    View event
-                  </button>
-                </article>
-              );
-            })
-          )}
-        </div>
-      </SheetContent>
-    </Sheet>
   );
 }
 
@@ -358,6 +265,9 @@ function handleUserChange(userId: string) {
     !alert.superseded &&
     !isPaused(alert.eventId)
 );
+  const unacknowledgedCount =
+    countUnacknowledgedAlerts(activeAlerts);
+
   const current = event
     ? latestRevision(event).cdm
     : null;
@@ -394,8 +304,8 @@ function handleUserChange(userId: string) {
       setDetailsOpen(false);
       setReportOpen(false);
       setRulesOpen(false);
-      setOutboxOpen(false);
       setPauseOpen(false);
+      setOutboxOpen(false);
       setNotificationsOpen(false);
       setView("operator");
     });
@@ -430,17 +340,17 @@ function handleUserChange(userId: string) {
               <button
                 type="button"
                 className="relative rounded-md p-2 hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2"
-                aria-label={`Open notifications (${activeAlerts.length})`}
+                aria-label={`Open notifications (${unacknowledgedCount})`}
                 onClick={() => setNotificationsOpen(true)}
               >
                 <Bell className="size-4" />
 
-                {activeAlerts.length > 0 && (
+                {unacknowledgedCount > 0 && (
                   <span
                     className="absolute -right-1 -top-1 rounded-full bg-amber-600 px-1 text-[10px] text-white"
                     aria-hidden="true"
                   >
-                    {activeAlerts.length}
+                    {unacknowledgedCount}
                   </span>
                 )}
               </button>
@@ -801,6 +711,7 @@ function handleUserChange(userId: string) {
         open={notificationsOpen}
         onOpenChange={setNotificationsOpen}
         onSelect={selectEvent}
+        onAcknowledge={session.acknowledgeNotification}
       />
 
       {event && (

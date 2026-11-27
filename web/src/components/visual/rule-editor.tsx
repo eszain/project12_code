@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState } from "react";
@@ -16,13 +15,20 @@ import {
   SheetTitle,
 } from "@/components/animate-ui/components/radix/sheet";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/animate-ui/components/buttons/button";
 import { Input } from "@/components/ui/input";
 
 import type {
   AlertRule,
   RuleChange,
 } from "@/lib/cads/store";
+
+import {
+  getNotificationHandler,
+  getNotificationHandlers,
+  resolveNotificationHandlerIds,
+  type NotificationHandlerId,
+} from "@/lib/cads/notification-handlers";
 
 type RuleInput = Omit<AlertRule, "id">;
 
@@ -32,6 +38,7 @@ const emptyRule = (): RuleInput => ({
   missDistanceMaxM: null,
   hoursToTcaMax: null,
   objectIds: [],
+  handlerIds: ["local"],
 });
 
 export function RuleEditor({
@@ -73,6 +80,7 @@ export function RuleEditor({
             missDistanceMaxM: rule.missDistanceMaxM,
             hoursToTcaMax: rule.hoursToTcaMax,
             objectIds: [...rule.objectIds],
+            handlerIds: resolveNotificationHandlerIds(rule.handlerIds),
           }
         : emptyRule()
     );
@@ -84,6 +92,23 @@ export function RuleEditor({
     setError("");
   }
 
+  function toggleHandler(handlerId: NotificationHandlerId, checked: boolean) {
+    setForm((current) => {
+      if (!current) return current;
+
+      const selected = resolveNotificationHandlerIds(current.handlerIds);
+
+      return {
+        ...current,
+        handlerIds: checked
+          ? resolveNotificationHandlerIds([...selected, handlerId])
+          : selected.filter((id) => id !== handlerId),
+      };
+    });
+
+    setError("");
+  }
+
   function save(
     event: React.FormEvent<HTMLFormElement>
   ) {
@@ -91,8 +116,16 @@ export function RuleEditor({
 
     if (!form) return;
 
+    const handlerIds = resolveNotificationHandlerIds(form.handlerIds);
+
+    if (handlerIds.length === 0) {
+      setError("At least one notification handler is required.");
+      return;
+    }
+
     const input = {
       ...form,
+      handlerIds,
       objectIds: [
         ...new Set(
           watchText
@@ -248,6 +281,47 @@ export function RuleEditor({
                 />
               </label>
 
+              <fieldset className="space-y-2 rounded-lg border p-3">
+                <legend className="px-1 text-sm font-medium">
+                  Notification handlers
+                </legend>
+
+                <p className="text-xs text-muted-foreground">
+                  Choose at least one delivery handler.
+                  Mock handlers only record what they would send.
+                </p>
+
+                {getNotificationHandlers().map((handler) => (
+                  <label
+                    key={handler.id}
+                    className="flex cursor-pointer items-start gap-3 rounded-md border p-3 hover:bg-muted/50"
+                  >
+                    <input
+                      type="checkbox"
+                      className="mt-0.5 size-4 accent-primary"
+                      checked={resolveNotificationHandlerIds(form.handlerIds).includes(handler.id)}
+                      onChange={(event) =>
+                        toggleHandler(handler.id, event.target.checked)
+                      }
+                    />
+
+                    <div className="space-y-1">
+                      <span className="text-sm font-medium">
+                        {handler.label}
+                      </span>
+
+                      <p className="text-xs text-muted-foreground">
+                        {handler.id === "local"
+                          ? "Record the notification through the in-app delivery channel."
+                          : handler.id === "webhook"
+                            ? "Record a mock HTTP request without sending it."
+                            : "Record a mock email without sending it."}
+                      </p>
+                    </div>
+                  </label>
+                ))}
+              </fieldset>
+
               {error && (
                 <p
                   role="alert"
@@ -321,6 +395,17 @@ export function RuleEditor({
                           .filter(Boolean)
                           .join(" · ")}
                       </p>
+
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {resolveNotificationHandlerIds(rule.handlerIds).map((id) => (
+                          <span
+                            key={id}
+                            className="rounded-full border bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
+                          >
+                            {getNotificationHandler(id).label}
+                          </span>
+                        ))}
+                      </div>
                     </div>
 
                     <div className="flex shrink-0 gap-1">
