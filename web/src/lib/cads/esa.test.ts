@@ -6,6 +6,7 @@ import { Store, severityOf } from "./store";
 import {
   ESA_PAUSE_MS,
   ESA_TCA,
+  ESA_TCA_LEAD_DAYS,
   collisionProbabilityText,
   dripBatches,
   fetchEsaSample,
@@ -154,5 +155,22 @@ describe("ESA row mapping", () => {
     expect(shouldPauseAfter(4, 5, 5)).toBe(false);
     const docs = await fetchEsaSample(async () => ({ ok: false, json: async () => ({}) }));
     expect(docs).toBeNull();
+  });
+
+  it("moves the sample's closest approach to a week from now, keeping the spacing between messages", async () => {
+    const files: Record<string, unknown> = {
+      "/esa-sample/manifest.json": { tca: ESA_TCA, files: ["a.json", "b.json"] },
+      "/esa-sample/a.json": { TCA: ESA_TCA, CREATION_DATE: "2026-11-27T00:00:00.000Z", MISS_DISTANCE: "300" },
+      "/esa-sample/b.json": { TCA: ESA_TCA, CREATION_DATE: "2026-11-30T12:00:00.000Z", MISS_DISTANCE: "250" },
+    };
+    const now = Date.UTC(2027, 5, 1, 9, 30);
+    const docs = (await fetchEsaSample(async (url) => ({ ok: url in files, json: async () => structuredClone(files[url]) }), now))!;
+    const [a, b] = docs.map((d) => JSON.parse(d.content));
+    const tca = now + ESA_TCA_LEAD_DAYS * 86400000;
+    expect(Date.parse(a.TCA)).toBe(tca);
+    expect(Date.parse(b.TCA)).toBe(tca);
+    expect(Date.parse(a.CREATION_DATE)).toBe(tca - 4 * 86400000);
+    expect(Date.parse(b.CREATION_DATE)).toBe(tca - 12 * 3600000);
+    expect(a.MISS_DISTANCE).toBe("300"); // only the times move
   });
 });

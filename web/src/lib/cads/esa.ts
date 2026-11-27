@@ -3,6 +3,8 @@
 // or JSON already written by scripts/esa_to_cdm.py.
 
 export const ESA_TCA = "2026-12-01T00:00:00.000Z";
+/** When the sample is loaded, its closest approach is moved to this many days from now, so the events stay upcoming. */
+export const ESA_TCA_LEAD_DAYS = 7;
 /** Dataset floor: a risk at or below this is a clipped log, so Pc is exactly 0. */
 export const ESA_RISK_FLOOR = -30;
 export const ESA_BATCH_SIZE = 5;
@@ -190,20 +192,38 @@ export function dripBatches<T>(items: readonly T[], size = ESA_BATCH_SIZE): T[][
 
 type Fetcher = (url: string) => Promise<{ ok: boolean; json: () => Promise<unknown> }>;
 
-/** Load /esa-sample/manifest.json and its CDM files. Null when the script has not been run. */
-export async function fetchEsaSample(fetchImpl: Fetcher = fetch): Promise<EsaDocument[] | null> {
+/** Move CREATION_DATE and TCA by the same amount, keeping the ISO format, so the spacing between messages is unchanged. */
+function shiftRecord(rec: Record<string, unknown>, deltaMs: number) {
+  for (const key of ["CREATION_DATE", "TCA"]) {
+    const v = rec[key];
+    if (typeof v !== "string") continue;
+    const t = Date.parse(v);
+    if (Number.isFinite(t)) rec[key] = new Date(t + deltaMs).toISOString();
+  }
+}
+
+/**
+ * Load /esa-sample/manifest.json and its CDM files. Null when the script has not been run. The files are dated
+ * to one fixed closest approach; here it is moved to ESA_TCA_LEAD_DAYS from `nowMs`, so the events read as upcoming
+ * whenever the sample is loaded.
+ */
+export async function fetchEsaSample(fetchImpl: Fetcher = fetch, nowMs = Date.now()): Promise<EsaDocument[] | null> {
   const manifestRes = await fetchImpl("/esa-sample/manifest.json");
   if (!manifestRes.ok) return null;
-  const manifest = (await manifestRes.json()) as { files?: unknown };
+  const manifest = (await manifestRes.json()) as { files?: unknown; tca?: unknown };
   if (!Array.isArray(manifest.files)) throw new Error("ESA sample manifest has no file list");
+  const anchor = Date.parse(typeof manifest.tca === "string" ? manifest.tca : ESA_TCA);
+  const deltaMs = Number.isFinite(anchor) ? nowMs + ESA_TCA_LEAD_DAYS * DAY_MS - anchor : 0;
   const docs: EsaDocument[] = [];
   for (const file of manifest.files) {
     if (typeof file !== "string" || !file) throw new Error("ESA sample manifest lists a file that is not a name");
     const body = await fetchImpl(`/esa-sample/${file}`);
     if (!body.ok) throw new Error(`ESA sample file missing: ${file}`);
+    const rec = (await body.json()) as Record<string, unknown>;
+    shiftRecord(rec, deltaMs);
     docs.push({
       name: file,
-      content: JSON.stringify(await body.json()),
+      content: JSON.stringify(rec),
       label: "esa-sample",
     });
   }

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Turn a local ESA Kelvins training CSV into CDM JSON for the dashboard.
 
-Reads data/esa/train_data.csv by default and writes the first 8 events, oldest
+Reads data/esa/train_data.csv by default and writes the first 20 events, oldest
 message first, to web/public/esa-sample/. Both folders are gitignored. The
 formulas match web/src/lib/cads/esa.ts. This script never prints a data row.
 """
@@ -21,7 +21,7 @@ DEFAULT_CSV = ROOT / "data" / "esa" / "train_data.csv"
 DEFAULT_OUT = ROOT / "web" / "public" / "esa-sample"
 DEFAULT_TCA = "2026-12-01T00:00:00.000Z"
 DEFAULT_FLOOR = -30.0
-DEFAULT_EVENTS = 8
+DEFAULT_EVENTS = 20
 
 STATE_KEYS = {
     "SAT1_X",
@@ -210,6 +210,13 @@ def main() -> int:
             events.setdefault(event_id, []).append(row)
 
     chosen = list(events.items())[: max(0, args.events)]
+    # The designators include mission_id, so a mission that changes inside one event would split it into two.
+    for event_id, rows in chosen:
+        missions = {cell(r, "mission_id") for r in rows if cell(r, "mission_id")}
+        if len(missions) > 1:
+            print(f"Event {event_id} has more than one mission_id ({', '.join(sorted(missions))}). "
+                  "CADS would split it into separate events, so the converter stops.", file=sys.stderr)
+            return 1
     written: list[tuple[float, str, dict[str, str]]] = []
     for event_id, rows in chosen:
         for row in rows:
