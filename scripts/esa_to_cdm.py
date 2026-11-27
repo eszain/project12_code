@@ -1,9 +1,16 @@
 #!/usr/bin/env python3
-"""Turn a local ESA Kelvins training CSV into CDM JSON for the dashboard.
+"""Turn the ESA Kelvins collision-avoidance CSVs into CDM JSON for the dashboard.
 
-Reads data/esa/train_data.csv by default and writes the first 20 events, oldest
-message first, to web/public/esa-sample/. Both folders are gitignored. The
-formulas match web/src/lib/cads/esa.ts. This script never prints a data row.
+Reads data/esa/train_data.csv (and data/esa/test_data.csv when it is there) and picks a
+mix of events by how the latest message of each event rates: red (Pc at or above the
+action level), watch, low, and near-zero. The default is 30 events, 18 of them red.
+Real red events are rare (13 of 13,154 in the training file), so the test file, which
+ESA built to over-represent high-risk events, supplies more of them. Test-file events
+are marked with a leading T in the event id, because the two files reuse the same ids.
+
+Writes web/public/esa-sample/manifest.json, one file holding every message, oldest
+first. The CSVs stay in data/esa/ (git-ignored). The formulas match
+web/src/lib/cads/esa.ts. This script never prints a data row.
 """
 
 from __future__ import annotations
@@ -11,6 +18,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import math
 import sys
 from collections import OrderedDict
 from datetime import datetime, timedelta, timezone
@@ -18,10 +26,15 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CSV = ROOT / "data" / "esa" / "train_data.csv"
+DEFAULT_TEST_CSV = ROOT / "data" / "esa" / "test_data.csv"
 DEFAULT_OUT = ROOT / "web" / "public" / "esa-sample"
 DEFAULT_TCA = "2026-12-01T00:00:00.000Z"
 DEFAULT_FLOOR = -30.0
-DEFAULT_EVENTS = 20
+DEFAULT_MIX = "red=18,watch=6,low=4,zero=2"
+ACTION_RISK = -4.0  # log10 of the action level, Pc 1e-4
+WATCH_RISK = -7.0  # log10 of the watch level, Pc 1e-7
+MIN_CDMS = {"red": 6, "watch": 8, "low": 8, "zero": 8}  # enough history for the charts
+BANDS = ("red", "watch", "low", "zero")
 
 STATE_KEYS = {
     "SAT1_X",
@@ -142,7 +155,7 @@ def row_to_cdm(row: dict[str, str], tca: datetime, floor: float) -> dict[str, st
         "MISS_DISTANCE_UNIT": "m",
         "SAT1_OBJECT": "OBJECT1",
         "SAT1_OBJECT_DESIGNATOR": f"ESA-{mission_id}-{event_id}",
-        "SAT1_OBJECT_NAME": f"ESA mission {mission_id}",
+        "SAT1_OBJECT_NAME": f"ESA event {event_id} (mission {mission_id})",
         "SAT1_OBJECT_TYPE": "PAYLOAD",
         "SAT2_OBJECT": "OBJECT2",
         "SAT2_OBJECT_DESIGNATOR": f"ESA-C-{event_id}",
@@ -171,12 +184,85 @@ def parse_tca(text: str) -> datetime:
     return datetime.fromisoformat(text.replace("Z", "+00:00")).astimezone(timezone.utc)
 
 
+def read_events(path: Path, prefix: str) -> OrderedDict[str, list[dict[str, str]]]:
+    """Rows grouped by event. The prefix keeps train and test ids apart."""
+    events: OrderedDict[str, list[dict[str, str]]] = OrderedDict()
+    with path.open(newline="", encoding="utf-8-sig") as handle:
+        for row in csv.DictReader(handle):
+            event_id = cell(row, "event_id")
+            if not event_id:
+                continue
+            key = prefix + event_id
+            row["event_id"] = key
+            events.setdefault(key, []).append(row)
+    return events
+
+
+def latest_risk(rows: list[dict[str, str]]) -> float | None:
+    """Risk of the latest message: the one with the smallest time_to_tca."""
+    best: tuple[float, float] | None = None
+    for row in rows:
+        lead, risk = number(row, "time_to_tca"), number(row, "risk")
+        if lead is None or risk is None:
+            continue
+        if best is None or lead < best[0]:
+            best = (lead, risk)
+    return None if best is None else best[1]
+
+
+def band_of(risk: float, floor: float) -> str:
+    if risk <= floor:
+        return "zero"
+    if risk >= ACTION_RISK:
+        return "red"
+    return "watch" if risk >= WATCH_RISK else "low"
+
+
+def parse_mix(text: str) -> dict[str, int]:
+    mix = {band: 0 for band in BANDS}
+    for part in text.split(","):
+        name, _, count = part.partition("=")
+        name = name.strip()
+        if name not in mix or not count.strip().isdigit():
+            raise SystemExit(f"--mix must look like red=18,watch=6,low=4,zero=2 (got {text!r}).")
+        mix[name] = int(count)
+    return mix
+
+
+def choose(sources: list[OrderedDict[str, list[dict[str, str]]]], mix: dict[str, int], floor: float):
+    """Per band: events with the longest history first, taking turns between the files. Deterministic."""
+    pools: dict[str, list[list[tuple[int, str, list[dict[str, str]]]]]] = {b: [[] for _ in sources] for b in BANDS}
+    for index, events in enumerate(sources):
+        for key, rows in events.items():
+            risk = latest_risk(rows)
+            if risk is None:
+                continue
+            band = band_of(risk, floor)
+            if len(rows) >= MIN_CDMS[band]:
+                pools[band][index].append((-len(rows), key, rows))
+    chosen: list[tuple[str, str, list[dict[str, str]]]] = []
+    shortfall: dict[str, int] = {}
+    for band in BANDS:
+        queues = [sorted(q, key=lambda item: (item[0], item[1])) for q in pools[band]]
+        picked = 0
+        while picked < mix[band] and any(queues):
+            for queue in queues:
+                if queue and picked < mix[band]:
+                    _, key, rows = queue.pop(0)
+                    chosen.append((band, key, rows))
+                    picked += 1
+        if picked < mix[band]:
+            shortfall[band] = mix[band] - picked
+    return chosen, shortfall
+
+
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Convert the first ESA training events into CDM JSON.")
-    parser.add_argument("csv", nargs="?", default=str(DEFAULT_CSV), help="training CSV (not test_data.csv)")
-    parser.add_argument("--events", type=int, default=DEFAULT_EVENTS, help="how many events to write")
-    parser.add_argument("--pc-floor", type=float, default=DEFAULT_FLOOR, help="risk at or below this becomes Pc 0")
-    parser.add_argument("--out", default=str(DEFAULT_OUT), help="directory for JSON files and manifest.json")
+    parser = argparse.ArgumentParser(description="Convert a mix of ESA events into CDM JSON.")
+    parser.add_argument("csv", nargs="?", default=str(DEFAULT_CSV), help="training CSV")
+    parser.add_argument("--test-csv", default=str(DEFAULT_TEST_CSV), help="test CSV, used when the file exists (it has more high-risk events)")
+    parser.add_argument("--mix", default=DEFAULT_MIX, help="events per band, by the latest message: red (Pc >= 1e-4), watch, low, zero")
+    parser.add_argument("--pc-floor", type=float, default=DEFAULT_FLOOR, help="risk at or below this becomes a Pc too small to measure")
+    parser.add_argument("--out", default=str(DEFAULT_OUT), help="directory for manifest.json")
     parser.add_argument("--tca", default=DEFAULT_TCA, help="shared closest-approach time")
     args = parser.parse_args()
 
@@ -191,72 +277,59 @@ def main() -> int:
         )
         return 1
     if csv_path.name.lower().startswith("test"):
-        print("Use the training CSV. The test file's risk column is the value to predict.", file=sys.stderr)
+        print("Pass the training CSV first; the test CSV goes in --test-csv.", file=sys.stderr)
         return 1
 
-    tca = parse_tca(args.tca)
-    events: OrderedDict[str, list[dict[str, str]]] = OrderedDict()
-    minimum_risk: float | None = None
-    skipped = 0
-    with csv_path.open(newline="", encoding="utf-8-sig") as handle:
-        for row in csv.DictReader(handle):
-            risk = number(row, "risk")
-            if risk is not None:
-                minimum_risk = risk if minimum_risk is None else min(minimum_risk, risk)
-            event_id = cell(row, "event_id")
-            if not event_id:
-                skipped += 1
-                continue
-            events.setdefault(event_id, []).append(row)
+    mix = parse_mix(args.mix)
+    sources = [read_events(csv_path, "")]
+    test_path = Path(args.test_csv)
+    if test_path.is_file():
+        sources.append(read_events(test_path, "T"))
 
-    chosen = list(events.items())[: max(0, args.events)]
-    # The designators include mission_id, so a mission that changes inside one event would split it into two.
-    for event_id, rows in chosen:
+    chosen, shortfall = choose(sources, mix, args.pc_floor)
+    for band, missing in shortfall.items():
+        print(f"Only found {mix[band] - missing} of {mix[band]} {band} events.", file=sys.stderr)
+
+    # Every message of each chosen event. A mission_id that changes inside an event would split it, because
+    # the designators include it.
+    tca = parse_tca(args.tca)
+    written: list[tuple[float, str, dict[str, str]]] = []
+    skipped = 0
+    for band, key, rows in chosen:
         missions = {cell(r, "mission_id") for r in rows if cell(r, "mission_id")}
         if len(missions) > 1:
-            print(f"Event {event_id} has more than one mission_id ({', '.join(sorted(missions))}). "
+            print(f"Event {key} has more than one mission_id ({', '.join(sorted(missions))}). "
                   "CADS would split it into separate events, so the converter stops.", file=sys.stderr)
             return 1
-    written: list[tuple[float, str, dict[str, str]]] = []
-    for event_id, rows in chosen:
         for row in rows:
             cdm = row_to_cdm(row, tca, args.pc_floor)
             if cdm is None:
                 skipped += 1
                 continue
-            lead = number(row, "time_to_tca") or 0.0
-            written.append((lead, event_id, cdm))
+            written.append((number(row, "time_to_tca") or 0.0, key, cdm))
     written.sort(key=lambda item: (-item[0], item[1]))
 
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
-    for old in out_dir.glob("*.json"):
+    for old in list(out_dir.glob("*.json")):
         old.unlink()
-    names: list[str] = []
-    for index, (_, _, cdm) in enumerate(written, start=1):
-        name = f"esa_{index:04d}.json"
-        (out_dir / name).write_text(json.dumps(cdm, indent=2) + "\n", encoding="utf-8")
-        names.append(name)
+    names = [f"esa_{index:04d}.json" for index in range(1, len(written) + 1)]
+    counts = {band: sum(1 for b, _, _ in chosen if b == band) for band in BANDS}
     manifest = {
-        "source": "ESA Kelvins collision-avoidance training CSV",
+        "source": "ESA Kelvins collision-avoidance challenge data (train_data.csv and test_data.csv)",
         "tca": args.tca,
         "pcFloor": args.pc_floor,
         "events": len(chosen),
+        "eventsByLatestRating": counts,
         "files": names,
+        "cdms": [cdm for _, _, cdm in written],
     }
-    (out_dir / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    (out_dir / "manifest.json").write_text(json.dumps(manifest, separators=(",", ":")) + "\n", encoding="utf-8")
 
-    print(f"events: {len(chosen)}")
+    print(f"events: {len(chosen)} ({', '.join(f'{b} {n}' for b, n in counts.items())})")
     print(f"cdms: {len(names)}")
     print(f"skipped: {skipped}")
-    print("minimum risk: " + ("none" if minimum_risk is None else repr(minimum_risk)))
-    print(f"wrote: {out_dir}")
-    if minimum_risk is not None and minimum_risk < args.pc_floor:
-        print(
-            f"The minimum risk is below the floor {args.pc_floor}. "
-            f"Re-run with --pc-floor {minimum_risk} if that value is the dataset clip.",
-            file=sys.stderr,
-        )
+    print(f"wrote: {out_dir / 'manifest.json'} ({(out_dir / 'manifest.json').stat().st_size // 1024} KB)")
     return 0
 
 

@@ -320,7 +320,7 @@ export function useCadsSession(
       setAnalysis(null);
       return feedDocuments(
         docs,
-        "Dates use one fixed closest approach, so the timeline keeps the real shape. Now run the risk analysis.",
+        "Real conjunction data from the ESA Collision Avoidance Challenge (Kelvins), re-dated so the closest approach is a week away. Now run the risk analysis.",
         ESA_LOAD_PACE
       );
     });

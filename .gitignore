@@ -21,6 +21,6 @@ data/samples/space-track/*.json
 data/samples/space-track/*.kvn
 data/samples/space-track/*.txt
 
-# ESA Kelvins collision-avoidance data has no licence. Keep the CSV and the converted sample local.
+# The ESA Kelvins CSVs (about 320 MB) stay local. The converted 30-event sample in web/public/esa-sample/ is committed
+# so the hosted dashboard can show it; see docs/esa-dataset.md.
 data/esa/
-web/public/esa-sample/

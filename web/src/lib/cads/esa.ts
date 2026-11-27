@@ -5,13 +5,16 @@
 export const ESA_TCA = "2026-12-01T00:00:00.000Z";
 /** When the sample is loaded, its closest approach is moved to this many days from now, so the events stay upcoming. */
 export const ESA_TCA_LEAD_DAYS = 7;
+/** Each event is moved earlier by a fixed amount of up to this many days, so the closest approaches are 1 to 7 days away rather than all at once. */
+export const ESA_TCA_SPREAD_DAYS = 6;
 /** Dataset floor: a risk at or below this is a clipped log, so Pc is exactly 0. */
 export const ESA_RISK_FLOOR = -30;
-export const ESA_BATCH_SIZE = 5;
-export const ESA_PAUSE_MS = 400;
+// 30 events are about 470 messages: 10 at a time with a short pause is a drip of roughly 15 s, not a dump all at once.
+export const ESA_BATCH_SIZE = 10;
+export const ESA_PAUSE_MS = 300;
 export const ESA_STATUS_LABEL = "Loading ESA CDM";
 export const ESA_SAMPLE_MISSING =
-  "ESA sample is not on this computer. Download the training CSV and run python scripts/esa_to_cdm.py.";
+  "The ESA sample is not on this server. Download the Kelvins CSVs and run python scripts/esa_to_cdm.py (see docs/esa-dataset.md).";
 
 export const ESA_LOAD_PACE = {
   batchSize: ESA_BATCH_SIZE,
@@ -120,7 +123,7 @@ export function rowToCdm(row: EsaRow, options?: { tca?: string; riskFloor?: numb
     MISS_DISTANCE_UNIT: "m",
     SAT1_OBJECT: "OBJECT1",
     SAT1_OBJECT_DESIGNATOR: `ESA-${missionId}-${eventId}`,
-    SAT1_OBJECT_NAME: `ESA mission ${missionId}`,
+    SAT1_OBJECT_NAME: `ESA event ${eventId} (mission ${missionId})`,
     SAT1_OBJECT_TYPE: "PAYLOAD",
     SAT2_OBJECT: "OBJECT2",
     SAT2_OBJECT_DESIGNATOR: `ESA-C-${eventId}`,
@@ -192,8 +195,17 @@ export function dripBatches<T>(items: readonly T[], size = ESA_BATCH_SIZE): T[][
 
 type Fetcher = (url: string) => Promise<{ ok: boolean; json: () => Promise<unknown> }>;
 
+/** A fixed offset for one event, from its designator, so every message of an event moves together and a reload gives the same spread. */
+export function eventOffsetMs(rec: Record<string, unknown>): number {
+  const id = typeof rec.SAT1_OBJECT_DESIGNATOR === "string" ? rec.SAT1_OBJECT_DESIGNATOR : "";
+  let h = 0;
+  for (const ch of id) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return id ? -(h % (ESA_TCA_SPREAD_DAYS * 24 * 60)) * 60000 : 0;
+}
+
 /** Move CREATION_DATE and TCA by the same amount, keeping the ISO format, so the spacing between messages is unchanged. */
-function shiftRecord(rec: Record<string, unknown>, deltaMs: number) {
+function shiftRecord(rec: Record<string, unknown>, baseMs: number) {
+  const deltaMs = baseMs + eventOffsetMs(rec);
   for (const key of ["CREATION_DATE", "TCA"]) {
     const v = rec[key];
     if (typeof v !== "string") continue;
@@ -203,18 +215,29 @@ function shiftRecord(rec: Record<string, unknown>, deltaMs: number) {
 }
 
 /**
- * Load /esa-sample/manifest.json and its CDM files. Null when the script has not been run. The files are dated
- * to one fixed closest approach; here it is moved to ESA_TCA_LEAD_DAYS from `nowMs`, so the events read as upcoming
- * whenever the sample is loaded.
+ * Load /esa-sample/manifest.json. The converter puts every message in its `cdms` list; a manifest with only a `files`
+ * list (an older sample folder) is read file by file. Null when the script has not been run. The files are dated
+ * to one fixed closest approach; here it is moved to ESA_TCA_LEAD_DAYS from `nowMs`, and each event a little earlier
+ * (up to ESA_TCA_SPREAD_DAYS), so the events read as upcoming, at different times, whenever the sample is loaded.
  */
 export async function fetchEsaSample(fetchImpl: Fetcher = fetch, nowMs = Date.now()): Promise<EsaDocument[] | null> {
   const manifestRes = await fetchImpl("/esa-sample/manifest.json");
   if (!manifestRes.ok) return null;
-  const manifest = (await manifestRes.json()) as { files?: unknown; tca?: unknown };
+  const manifest = (await manifestRes.json()) as { files?: unknown; tca?: unknown; cdms?: unknown };
   if (!Array.isArray(manifest.files)) throw new Error("ESA sample manifest has no file list");
   const anchor = Date.parse(typeof manifest.tca === "string" ? manifest.tca : ESA_TCA);
   const deltaMs = Number.isFinite(anchor) ? nowMs + ESA_TCA_LEAD_DAYS * DAY_MS - anchor : 0;
   const docs: EsaDocument[] = [];
+  if (Array.isArray(manifest.cdms)) {
+    const names: unknown[] = manifest.files;
+    if (manifest.cdms.length !== names.length) throw new Error("ESA sample manifest has a different number of names and messages");
+    manifest.cdms.forEach((rec, i) => {
+      const record = rec as Record<string, unknown>;
+      shiftRecord(record, deltaMs);
+      docs.push({ name: String(names[i]), content: JSON.stringify(record), label: "esa-sample" });
+    });
+    return docs;
+  }
   for (const file of manifest.files) {
     if (typeof file !== "string" || !file) throw new Error("ESA sample manifest lists a file that is not a name");
     const body = await fetchImpl(`/esa-sample/${file}`);
