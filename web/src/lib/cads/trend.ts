@@ -5,23 +5,39 @@ import type { CdmEvent } from "./store";
 export interface TrendPoint {
   n: number; // 1-based position in the history
   createdMs: number;
-  hoursToTca: number; // hours between CDM creation and TCA
+  hoursToTca: number | null; // hours between this CDM's creation and its source TCA
   pc: number | null;
   pcRaw: string | null;
-  missM: number;
+  missM: number | null;
   file: string;
 }
 
 export const trendPoints = (e: CdmEvent): TrendPoint[] =>
-  e.revisions.map((r, i) => ({
-    n: i + 1,
-    createdMs: r.cdm.creationDate,
-    hoursToTca: (r.cdm.tca - r.cdm.creationDate) / 3600000,
-    pc: r.cdm.pc,
-    pcRaw: r.cdm.pcRaw,
-    missM: r.cdm.missDistanceM,
-    file: r.sourceFile,
-  }));
+  e.revisions
+    .map((r, originalIndex) => ({ r, originalIndex }))
+    .sort((a, b) => {
+      const aTime = a.r.cdm.creationDate;
+      const bTime = b.r.cdm.creationDate;
+      if (Number.isFinite(aTime) && Number.isFinite(bTime) && aTime !== bTime) return aTime - bTime;
+      if (Number.isFinite(aTime) !== Number.isFinite(bTime)) return Number.isFinite(aTime) ? -1 : 1;
+      return a.originalIndex - b.originalIndex;
+    })
+    .map(({ r }, i) => {
+      const createdMs = r.cdm.creationDate;
+      const tca = r.cdm.tca;
+      const hoursToTca = Number.isFinite(createdMs) && Number.isFinite(tca)
+        ? (tca - createdMs) / 3600000
+        : null;
+      return {
+        n: i + 1,
+        createdMs,
+        hoursToTca: Number.isFinite(hoursToTca) ? hoursToTca : null,
+        pc: typeof r.cdm.pc === "number" && Number.isFinite(r.cdm.pc) && r.cdm.pc >= 0 ? r.cdm.pc : null,
+        pcRaw: r.cdm.pcRaw,
+        missM: Number.isFinite(r.cdm.missDistanceM) && r.cdm.missDistanceM >= 0 ? r.cdm.missDistanceM : null,
+        file: r.sourceFile,
+      };
+    });
 
 export type Change = "higher" | "lower" | "same" | "n/a";
 
