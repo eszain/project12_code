@@ -294,10 +294,34 @@ const subscribedEvents = useMemo(
   () => visibleEvents(snap.events, selectedUser),
   [snap.events, selectedUser]
 );
+const visibleEventIds = useMemo(
+  () => new Set(subscribedEvents.map((item) => item.id)),
+  [subscribedEvents]
+);
 
 const event = subscribedEvents.find(
   (item) => item.id === selected
 );
+
+function handleUserChange(userId: string) {
+  const nextUser = MOCK_USERS.find(
+    (user) => user.id === userId
+  );
+
+  if (!nextUser) return;
+
+  const nextVisibleEvents = visibleEvents(
+    snap.events,
+    nextUser
+  );
+
+  setSelectedUserId(userId);
+
+  if (!nextVisibleEvents.some((item) => item.id === selected)) {
+    setSelected(null);
+    setDetailsOpen(false);
+  }
+}
 
   const isPaused = (eventId: number) =>
     isNotificationPaused(
@@ -323,12 +347,16 @@ const event = subscribedEvents.find(
     session.hydrated
   );
 
-  const activeAlerts = snap.alerts.filter(
-    (alert) =>
-      !alert.superseded &&
-      !isPaused(alert.eventId)
-  );
+  const visibleOutboxEntries = outbox.entries.filter(
+  (entry) => visibleEventIds.has(entry.eventId)
+);
 
+  const activeAlerts = snap.alerts.filter(
+  (alert) =>
+    visibleEventIds.has(alert.eventId) &&
+    !alert.superseded &&
+    !isPaused(alert.eventId)
+);
   const current = event
     ? latestRevision(event).cdm
     : null;
@@ -388,9 +416,9 @@ const event = subscribedEvents.find(
       >
         <SidebarContent className="p-3">
   <UserSwitcher
-    selectedUserId={selectedUserId}
-    onUserChange={setSelectedUserId}
-  />
+  selectedUserId={selectedUserId}
+  onUserChange={handleUserChange}
+/>
 
   <SidebarGroup>
             <div className="flex items-center justify-between gap-2">
@@ -504,7 +532,7 @@ const event = subscribedEvents.find(
                   >
                     <Send />
                     <span>
-                      Outbox &amp; Delivery ({outbox.entries.length})
+                     Outbox &amp; Delivery ({visibleOutboxEntries.length})
                     </span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -754,7 +782,7 @@ const event = subscribedEvents.find(
 
       <NotificationsSheet
         alerts={activeAlerts}
-        events={snap.events}
+        events={subscribedEvents}
         open={notificationsOpen}
         onOpenChange={setNotificationsOpen}
         onSelect={selectEvent}
@@ -782,7 +810,7 @@ const event = subscribedEvents.find(
       <OutboxSheet
         open={outboxOpen}
         onOpenChange={setOutboxOpen}
-        entries={outbox.entries}
+        entries={visibleOutboxEntries}
         deliver={outbox.deliver}
         retry={outbox.retry}
         simulateFailure={outbox.simulateFailure}

@@ -166,3 +166,58 @@ does not synchronize data between operators.
 - Real CSA data must not be committed to the repository.
 - The current implementation uses sample and synthetic
   data for testing and demonstration.
+
+## Satellite Subscriptions
+
+Satellite subscriptions determine which conjunction events are visible to each user. Users can subscribe to satellites directly or through a group using the satellite's object designator.
+
+### User Model
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | string | Unique user identifier. |
+| `name` | string | User display name. |
+| `role` | UserRole | Admin, operator, or specialist. |
+| `groupIds` | string[] | Groups the user belongs to. |
+| `satelliteDesignators` | string[] | Satellites the user directly subscribes to. |
+
+### Group Model
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | string | Unique group identifier. |
+| `name` | string | Group display name. |
+| `satelliteDesignators` | string[] | Satellites subscribed to by the group. |
+
+### Event Visibility Rules
+
+- Administrators can see all events regardless of their subscriptions.
+- Operators and specialists can only see events involving their subscribed satellites.
+- An event is visible if either its primary or secondary object's designator matches a subscription.
+- Direct and group subscriptions are combined, with duplicate designators removed.
+- Newly loaded CDMs are subject to the same visibility rules.
+- Filtering does not modify or delete the underlying stored events.
+
+The `getSubscribedDesignators()` and `visibleEvents()` functions in `web/src/lib/cads/subscriptions.ts` implement these rules.
+
+### Demo Users
+
+| User | Role | Subscription |
+|---|---|---|
+| Admin | Admin | All events |
+| CSA operator | Operator | SCISAT 1 (27858), through the CSA group |
+| Test operator | Operator | CADS TEST SAT (99901), directly subscribed |
+
+The user switcher in the left sidebar allows users to switch between these demo accounts. The event list, event counts, notification visibility, outbox visibility, and conjunction player follow the selected user.
+
+If a previously selected event is not visible to the new user, its selection is cleared.
+
+### Current Limitations
+
+This first version uses mock users and client-side visibility filtering as a stand-in for real accounts. Authentication and server-side authorization are not implemented.
+
+Notification display is filtered by subscription, but subscription-aware notification delivery is handled separately under Issue #31.
+
+### Testing
+
+The subscription logic is tested in `web/src/lib/cads/subscriptions.test.ts`. Tests cover administrator access, operator subscriptions, secondary-object matching, group subscriptions, users without subscriptions, newly loaded unsubscribed CDMs, and specialist visibility.
