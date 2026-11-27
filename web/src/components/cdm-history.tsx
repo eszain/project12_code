@@ -1,6 +1,6 @@
 "use client";
 
-import { formatShortOdds } from "@/lib/cads/analyze";
+import { formatPercent } from "@/lib/cads/analyze";
 import { CONFIG, type CdmEvent } from "@/lib/cads/store";
 import { isoZ } from "@/lib/cads/time";
 import { pcAxis, pcChange, pcFraction, trendPoints, type Change, type TrendPoint } from "@/lib/cads/trend";
@@ -72,23 +72,23 @@ function Frame({ points, yTicks, yAxisTitle }: { points: TrendPoint[]; yTicks: {
 function PcChart({ points }: { points: TrendPoint[] }) {
   const sourceAxis = pcAxis(points);
   if (!sourceAxis) {
-    const summary = points.map((p) => `CDM ${p.n}: ${p.pc === 0 ? "exactly 0" : "not provided"}`).join("; ");
-    return <p className="panel-note" role="img" aria-label={`Pc history. ${summary}`}>All available source Pc values are exactly 0; no non-zero values are present for a logarithmic scale.</p>;
+    const summary = points.map((p) => `CDM ${p.n}: ${formatPercent(p.pc)}`).join("; ");
+    return <p className="panel-note" role="img" aria-label={`Pc history. ${summary}`}>Every CDM reports a chance below 0.0000001%, too small to plot on a logarithmic scale.</p>;
   }
   const axis = {
     ...sourceAxis,
     floorExp: Math.min(sourceAxis.floorExp, Math.floor(Math.log10(CONFIG.pcWatch)) - 1),
     maxExp: Math.max(sourceAxis.maxExp, Math.ceil(Math.log10(CONFIG.pcAction))),
   };
-  const ticks = [{ frac: 0, label: "0" }];
-  for (let e = axis.minExp; e <= axis.maxExp; e++) ticks.push({ frac: pcFraction(10 ** e, axis), label: `1e${e}` });
+  const ticks = [{ frac: 0, label: `< ${formatPercent(10 ** axis.minExp)}` }];
+  for (let e = axis.minExp; e <= axis.maxExp; e++) ticks.push({ frac: pcFraction(10 ** e, axis), label: formatPercent(10 ** e) });
   const pts = points.filter((p) => p.hoursToTca !== null).map((p) => ({ x: px(p.hoursToTca, points), y: py(pcFraction(p.pc, axis)), zero: p.pc === 0, p }));
   const thresholdLines = [
     { value: CONFIG.pcWatch, label: "watch" },
     { value: CONFIG.pcAction, label: "action" },
   ];
   const known = pts.filter((q) => q.p.pc !== null);
-  const summary = points.map((p) => `CDM ${p.n}: ${p.pc === null ? "not provided" : formatShortOdds(p.pc)}`).join("; ");
+  const summary = points.map((p) => `CDM ${p.n}: ${p.pc === null ? "not provided" : formatPercent(p.pc)}`).join("; ");
   return (
     <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Pc trend across CDMs. ${summary}`} className="chart">
       <Frame points={points} yTicks={ticks} yAxisTitle="Probability of collision (Pc)" />
@@ -101,7 +101,7 @@ function PcChart({ points }: { points: TrendPoint[] }) {
       <polyline points={known.map((q) => `${q.x},${q.y}`).join(" ")} className="chart-line" />
       {known.map((q) => (
         <circle key={q.p.n} cx={q.x} cy={q.y} r={3.5} className={q.zero ? "chart-dot is-zero" : "chart-dot"}>
-          <title>{`CDM ${q.p.n}: Pc ${q.p.pcRaw ?? "not provided"}`}</title>
+          <title>{`CDM ${q.p.n}: Pc ${formatPercent(q.p.pc)}`}</title>
         </circle>
       ))}
     </svg>
@@ -156,8 +156,7 @@ export function CdmHistory({ event, chartsOnly = false }: { event: CdmEvent; cha
                   <td>{Number.isFinite(p.createdMs) ? isoZ(p.createdMs) : "unavailable"}</td>
                   <td>{p.hoursToTca === null ? "unavailable" : `${p.hoursToTca.toFixed(1)} h`}</td>
                   <td>
-                    <div>{p.pc === null ? "not provided" : formatShortOdds(p.pc)}</div>
-                    <code className="table-subline">{p.pcRaw ?? ""}</code>
+                    <div>{p.pc === null ? "not provided" : formatPercent(p.pc)}</div>
                   </td>
                   <td className={`change-${change}`}>{i === 0 ? "–" : CHANGE_LABEL[change]}</td>
                   <td>{p.missM === null ? "unavailable" : p.missM.toFixed(0)}</td>
@@ -170,7 +169,7 @@ export function CdmHistory({ event, chartsOnly = false }: { event: CdmEvent; cha
       </div>}
       <div className="ops-charts">
         <figure>
-          <figcaption>Probability of collision (Pc), log scale; watch {CONFIG.pcWatch.toExponential(0)}, action {CONFIG.pcAction.toExponential(0)}. Hollow dots are source Pc = 0.</figcaption>
+          <figcaption>Probability of collision (Pc), log scale; watch {formatPercent(CONFIG.pcWatch)}, action {formatPercent(CONFIG.pcAction)}. A hollow dot is a CDM whose chance is too small to plot; it sits on the bottom line.</figcaption>
           <PcChart points={points} />
         </figure>
         <figure>

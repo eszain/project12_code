@@ -1,6 +1,7 @@
 // What each severity means and what an operator should do about it (G7, G8, F1).
 // The bands are read from CONFIG so the legend, the badges and the alerts always agree.
 
+import { formatPercent } from "./analyze";
 import { CONFIG, type Severity } from "./store";
 
 export interface SeverityBand {
@@ -15,7 +16,7 @@ export interface SeverityBand {
   basis: string;
 }
 
-const oneIn = (pc: number) => `1 in ${Math.round(1 / pc).toLocaleString("en-US")}`;
+const oneIn = (pc: number) => formatPercent(pc);
 
 export function severityBands(): SeverityBand[] {
   return [
@@ -42,10 +43,10 @@ export function severityBands(): SeverityBand[] {
     },
     {
       severity: "ZERO",
-      range: "Pc exactly 0 in the CDM",
+      range: "Pc too small to measure (the CDM reports 0)",
       action: "No action",
-      meaning: "The CDM rounds the chance down to 0. The true chance is never exactly zero, but it is less than 0.0000001% (below 1 in a billion), so the pass is safe.",
-      basis: "Source value is exactly zero.",
+      meaning: "The CDM reports a chance too small to measure. The true chance is never exactly zero, but it is less than 0.0000001%, so the pass is safe.",
+      basis: "Source value is below the reporting limit.",
     },
     {
       severity: "UNKNOWN",

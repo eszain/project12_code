@@ -1,7 +1,7 @@
 "use client";
 
 import { Latex } from "@/components/latex";
-import { formatOdds } from "@/lib/cads/analyze";
+import { formatPercent } from "@/lib/cads/analyze";
 import { calculationDetails, missVsUncertainty, type Confidence } from "@/lib/cads/details";
 import type { NormalizedCdm } from "@/lib/cads/parser";
 import { latestRevision, type CdmEvent } from "@/lib/cads/store";
@@ -75,14 +75,14 @@ export function CalculationDetails({
       <h3 className="calc-step">Step 1. What the CDM says (Encounter Geometry)</h3>
       <p>
         The two objects pass {fmtM(d.source.missM)} apart{d.source.speedMs ? ` at ${(d.source.speedMs / 1000).toFixed(1)} km/s` : ""}. The CDM reports a collision chance of{" "}
-        <code>{d.source.pcRaw ?? "not provided"}</code>
+        {formatPercent(cdm.pc)}
         {d.source.pcMethod ? ` (method: ${d.source.pcMethod})` : ""}. This is the value CADS uses for the severity rating.
       </p>
 
       <div className="math-latex-block">
         <Latex math={`d_{\\text{miss}} = \\|\\vec{r}_{2} - \\vec{r}_{1}\\| = ${fmtM(d.source.missM)}`} block />
         <Latex math={`v_{\\text{rel}} = \\|\\vec{v}_{2} - \\vec{v}_{1}\\| = ${fmtSpeed(d.source.speedMs)}`} block />
-        <Latex math={`P_{c, \\text{source}} = \\text{${d.source.pcRaw ?? "N/A"}}`} block />
+        <Latex math={`P_{c, \\text{source}} = ${formatPercent(cdm.pc).replace("%", "\\%")}`} block />
       </div>
 
       <h3 className="calc-step">Step 2. How sure we are where each object is (Positional Uncertainty & Covariance)</h3>
@@ -155,12 +155,12 @@ export function CalculationDetails({
       {r.available ? (
         <>
           <p>
-            {cautiousLanguage ? "CADS performs an experimental internal check from the same positions and uncertainties: " : "CADS recomputes the collision chance from the same positions and uncertainties: "}{formatOdds(r.recalculatedPc)} (<code>{r.recalculatedPc.toExponential(3)}</code>), against the CDM&apos;s {cautiousLanguage ? "reported " : ""}<code>{d.source.pcRaw ?? "n/a"}</code>.
+            {cautiousLanguage ? "CADS performs an experimental internal check from the same positions and uncertainties: " : "CADS recomputes the collision chance from the same positions and uncertainties: "}{formatPercent(r.recalculatedPc)}, against the CDM&apos;s {cautiousLanguage ? "reported " : ""}{formatPercent(cdm.pc)}.
             {r.ratioToSource !== null && ` Our value is ${r.ratioToSource.toFixed(2)}× the source value.`}
           </p>
           <div className="math-latex-block">
             <Latex
-              math={`R_{\\text{HBR}} = ${r.hbrM.toFixed(1)}\\text{ m}, \\quad P_{c, \\text{recalc}} = ${r.recalculatedPc.toExponential(3)}`}
+              math={`R_{\\text{HBR}} = ${r.hbrM.toFixed(1)}\\text{ m}, \\quad P_{c, \\text{recalc}} = ${formatPercent(r.recalculatedPc).replace("%", "\\%")}`}
               block
             />
           </div>

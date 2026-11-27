@@ -1,16 +1,16 @@
 // Risk analysis checks, shown after "Run risk analysis" (issue #9: the numbers behind the specialist view).
 //
 // Seven checks on the latest CDM of an event:
-//   1. Pc level           Pc from the CDM against the action level (1 in 10,000) and watch level (1 in 10 million)
+//   1. Pc level           Pc from the CDM against the action level and the watch level, as percentages
 //   2. Pc trend           this CDM's Pc compared with the previous CDM's Pc
 //   3. Miss / σ           miss distance / combined position 1σ along the miss direction
 //   4. Time to TCA        TCA - now
 //   5. Radial separation  altitude difference / combined altitude uncertainty
 //   6. Expanded Pc        worst case of three Pc methods (pc-methods.ts) and its green / yellow / red zone
-//   7. Maneuver options   smallest burn to reach 1 in 10,000, only for events at the action level (maneuver-space.ts)
+//   7. Maneuver options   smallest burn to reach the action level, only for events at the action level (maneuver-space.ts)
 // The severity itself still comes only from the CDM's Pc; these checks add context for the operator.
 
-import { formatShortOdds, missComponentsM } from "./analyze";
+import { formatPercent, missComponentsM } from "./analyze";
 import { missVsUncertainty } from "./details";
 import { maneuverOptionSpace, type OptionPoint } from "./maneuver-space";
 import { expandedPc } from "./pc-methods";
@@ -26,8 +26,8 @@ export interface RiskCheck {
 
 const fmtM = (m: number) => (m >= 10000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m).toLocaleString("en-US")} m`);
 const fmtRatio = (r: number) => (r >= 10 ? r.toFixed(0) : r.toFixed(1));
-/** Pc as "1 in N" odds; an exact 0 stays 0. */
-const odds = (pc: number | null) => (pc === 0 ? "0" : formatShortOdds(pc));
+/** Pc as a percentage. It is never "0": a very small or zero Pc reads "< 0.0000001%". */
+const odds = (pc: number | null) => formatPercent(pc);
 
 export function riskChecks(event: CdmEvent, nowMs: number): RiskCheck[] {
   const cdm = latestRevision(event).cdm;
@@ -37,7 +37,7 @@ export function riskChecks(event: CdmEvent, nowMs: number): RiskCheck[] {
   const severity = severityOf(cdm.pc);
   const level =
     severity === "UNKNOWN" ? "No Pc in CDM: unrated"
-    : severity === "ZERO" ? "CDM Pc = 0: CLEAR"
+    : severity === "ZERO" ? `${odds(cdm.pc)}: CLEAR`
     : severity === "ACTION" ? `${odds(cdm.pc)}, at or above action limit ${odds(CONFIG.pcAction)}: ACTION`
     : severity === "WATCH" ? `${odds(cdm.pc)}, between watch ${odds(CONFIG.pcWatch)} and action ${odds(CONFIG.pcAction)}: WATCH`
     : `${odds(cdm.pc)}, below watch limit ${odds(CONFIG.pcWatch)}: LOW`;
@@ -84,7 +84,7 @@ export function riskChecks(event: CdmEvent, nowMs: number): RiskCheck[] {
   }
 
   // 7. Maneuver options: generated only for events at or above the action level (maneuver-space.ts). A study only.
-  // Only what the sentence needs: the 1 in 10,000 line at half an orbit and 48 h. The full chart (three targets, eight
+  // Only what the sentence needs: the action-level line at half an orbit and 48 h. The full chart (three targets, eight
   // lead times) takes seconds and is worked out only when the chart is shown. This runs while an event card renders.
   const space = maneuverOptionSpace(cdm, { targets: [CONFIG.pcAction], leadHours: [48] });
   let maneuver = space.available ? "" : space.reason;

@@ -9,7 +9,7 @@
 // action level), so no time is spent on events that will not need a maneuver.
 // Built on tradeStudy() in maneuver.ts. A study only: CADS never commands a spacecraft.
 
-import { formatShortOdds } from "./analyze";
+import { formatPercent } from "./analyze";
 import { ASSUMPTIONS, LIMITATIONS, tradeStudy, type Spacecraft } from "./maneuver";
 import type { NormalizedCdm } from "./parser";
 import { CONFIG } from "./store";
@@ -74,7 +74,7 @@ export function maneuverOptionSpace(cdm: NormalizedCdm, opts: ManeuverSpaceOptio
 function compute(cdm: NormalizedCdm, { leadHours = DEFAULT_LEAD_HOURS, targets = DEFAULT_TARGETS, minPc = CONFIG.pcAction, spacecraft = DEFAULT_SPACECRAFT }: ManeuverSpaceOptions): ManeuverSpace {
   // 1. Gate: only when the CDM's own Pc is at or above the study level.
   if (cdm.pc === null) return { available: false, reason: "The CDM has no collision probability." };
-  if (cdm.pc < minPc) return { available: false, reason: `Not generated: Pc below the ${formatShortOdds(minPc)} maneuver-study threshold` };
+  if (cdm.pc < minPc) return { available: false, reason: `Not generated: Pc below the ${formatPercent(minPc)} maneuver-study threshold` };
 
   try {
     // 2. Orbit period from the primary's orbit; add the half-orbit lead time to the list.

@@ -1,7 +1,7 @@
 "use client";
 
 import { Latex } from "@/components/latex";
-import { formatOdds } from "@/lib/cads/analyze";
+import { formatPercent } from "@/lib/cads/analyze";
 import { calculationDetails, type Confidence } from "@/lib/cads/details";
 import { latestRevision, type CdmEvent } from "@/lib/cads/store";
 
@@ -41,7 +41,7 @@ export function CalculationsMathView({ event }: { event: CdmEvent }) {
         <div className="math-latex-block">
           <Latex math={`d_{\\text{miss}} = \\|\\vec{r}_2 - \\vec{r}_1\\| = ${fmtM(d.source.missM)}`} block />
           <Latex math={`v_{\\text{rel}} = \\|\\vec{v}_2 - \\vec{v}_1\\| = ${fmtSpeed(d.source.speedMs)}`} block />
-          <Latex math={`P_{c, \\text{source}} = \\text{${d.source.pcRaw ?? "not provided"}}`} block />
+          <Latex math={`P_{c, \\text{source}} = ${formatPercent(cdm.pc).replace("%", "\\%")}`} block />
         </div>
       </section>
 
@@ -161,7 +161,7 @@ export function CalculationsMathView({ event }: { event: CdmEvent }) {
           <>
             <div className="math-latex-block">
               <Latex
-                math={`R_{\\text{HBR}} = ${r.hbrM.toFixed(1)}\\text{ m}, \\quad P_{c, \\text{recalc}} = ${r.recalculatedPc.toExponential(3)} \\quad (${formatOdds(r.recalculatedPc)})`}
+                math={`R_{\\text{HBR}} = ${r.hbrM.toFixed(1)}\\text{ m}, \\quad P_{c, \\text{recalc}} = ${formatPercent(r.recalculatedPc).replace("%", "\\%")}`}
                 block
               />
             </div>
