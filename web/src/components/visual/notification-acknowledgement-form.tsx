@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Check } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/animate-ui/components/buttons/button";
 import { Input } from "@/components/ui/input";
 
 interface NotificationAcknowledgementFormProps {

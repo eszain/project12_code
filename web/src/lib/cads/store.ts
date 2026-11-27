@@ -1,10 +1,10 @@
-
 // In-memory event repository + alert evaluation (browser only; nothing is persisted or sent anywhere).
 // Port of cads/ingest.py and cads/alerts/rules.py. A page refresh or Reset clears everything.
 
 import { correlate, pairKey } from "./correlation";
 import { NormalizedCdm, parseDocument } from "./parser";
 import { hoursBetween, isoZ } from "./time";
+import { isNotificationHandlerId, resolveNotificationHandlerIds, type NotificationHandlerId } from "./notification-handlers";
 
 export const CONFIG = {
   correlationWindowS: 60, // team proposal, to confirm with CSA
@@ -43,6 +43,7 @@ export interface AlertRule {
   missDistanceMaxM: number | null;
   hoursToTcaMax: number | null;
   objectIds: string[];
+  handlerIds?: NotificationHandlerId[];
 }
 export interface NotificationAcknowledgement {
   acknowledgedBy: string;
@@ -62,6 +63,7 @@ export interface AlertOccurrence {
   ruleVersion?: number;
   superseded?: boolean;
   acknowledgement?: NotificationAcknowledgement;
+  handlerIds?: NotificationHandlerId[];
 }
 
 export interface RuleChange {
@@ -322,6 +324,10 @@ export class Store {
         input.hoursToTcaMax === null && !input.objectIds.some((id) => id.trim())) {
       throw new Error("At least one condition is required.");
     }
+    if (input.handlerIds !== undefined) {
+      if (input.handlerIds.length === 0) throw new Error("At least one notification handler is required.");
+      if (!input.handlerIds.every(isNotificationHandlerId)) throw new Error("Invalid notification handler.");
+    }
   }
 
   private recordChange(action: RuleChange["action"], before: AlertRule | null, after: AlertRule | null) {
@@ -341,6 +347,7 @@ export class Store {
   addRule(input: Omit<AlertRule, "id">): AlertRule {
     this.validateRule(input);
     const rule = { ...structuredClone(input), name: input.name.trim(), id: this.ids.rule++ };
+    if (input.handlerIds !== undefined) rule.handlerIds = resolveNotificationHandlerIds(input.handlerIds);
     this.rules.push(rule);
     this.ruleVersions[rule.id] = 1;
     this.recordChange("created", null, rule);
@@ -355,6 +362,7 @@ export class Store {
     if (index === -1) throw new Error("Rule not found.");
     const before = structuredClone(this.rules[index]);
     const updated = { ...structuredClone(input), name: input.name.trim(), id };
+    if (input.handlerIds !== undefined) updated.handlerIds = resolveNotificationHandlerIds(input.handlerIds);
     this.rules[index] = updated;
     this.ruleVersions[id] = (this.ruleVersions[id] ?? 1) + 1;
     this.alerts = this.alerts.map((alert) =>
@@ -512,12 +520,8 @@ export class Store {
     let created = 0;
     for (const rule of this.rules) {
       const { matches, reasons } = evaluateRule(rule, rev.cdm);
-      if (!matches || this.alerts.some(
-        (a) =>
-          a.ruleId === rule.id &&
-          a.revisionId === rev.id &&
-          !a.superseded
-      )) continue;      const c = rev.cdm;
+      if (!matches || this.alerts.some((a) => a.ruleId === rule.id && a.revisionId === rev.id && !a.superseded)) continue; // one alert per rule per CDM
+      const c = rev.cdm;
       const severity = severityOf(c.pc);
       this.alerts.unshift({
         id: this.ids.alert++,
@@ -529,6 +533,7 @@ export class Store {
         revisionId: rev.id,
         severity,
         matched: reasons,
+        handlerIds: resolveNotificationHandlerIds(rule.handlerIds),
         message: {
           type: "cads.conjunction.alert",
           severity,
@@ -559,23 +564,23 @@ export class Store {
     acknowledgedAt = Date.now()
   ): boolean {
     const operator = acknowledgedBy.trim();
-  
+
     if (!operator) {
       throw new Error("Operator name is required.");
     }
-  
+
     const alert = this.alerts.find(
       (item) => item.id === alertId
     );
-  
+
     if (!alert) {
       throw new Error("Notification not found.");
     }
-  
+
     if (alert.acknowledgement) {
       return false;
     }
-  
+
     this.alerts = this.alerts.map((item) =>
       item.id === alertId
         ? {
@@ -588,9 +593,9 @@ export class Store {
           }
         : item
     );
-  
+
     this.commit();
-  
+
     return true;
   }
 }

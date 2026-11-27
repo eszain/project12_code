@@ -1,4 +1,3 @@
-
 "use client";
 
 import {
@@ -9,6 +8,7 @@ import {
 } from "react";
 
 import type { AlertOccurrence } from "@/lib/cads/store";
+import { isNotificationHandlerId } from "@/lib/cads/notification-handlers";
 
 import {
   deliverOutbox,
@@ -57,19 +57,25 @@ function readOutbox(): OutboxEntry[] {
 
   if (!Array.isArray(parsed)) return [];
 
-  const seen = new Set<number>();
+  const seen = new Set<string>();
 
   return parsed
     .filter(isOutboxEntry)
-    .map((entry) => ({
-      ...entry,
-      id: `local:alert:${entry.alertId}`,
-      channel: "local" as const,
-    }))
-    .filter((entry) => {
-      if (seen.has(entry.alertId)) return false;
+    .map((entry) => {
+      const channel = isNotificationHandlerId(entry.channel)
+        ? entry.channel
+        : "local";
 
-      seen.add(entry.alertId);
+      return {
+        ...entry,
+        id: `${channel}:alert:${entry.alertId}`,
+        channel,
+      };
+    })
+    .filter((entry) => {
+      if (seen.has(entry.id)) return false;
+
+      seen.add(entry.id);
       return true;
     });
 }

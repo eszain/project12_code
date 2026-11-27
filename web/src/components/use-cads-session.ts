@@ -1,4 +1,3 @@
-
 "use client";
 
 // One CADS session in the browser: the event store, the risk analysis and the actions that change them.
@@ -418,7 +417,7 @@ export function useCadsSession(
         "Notification storage is not ready."
       );
     }
-  
+
     return store.acknowledgeNotification(
       alertId,
       acknowledgedBy,
@@ -438,26 +437,26 @@ export function useCadsSession(
   const deleteRule = (id: number) =>
     store.deleteRule(id);
 
-    return {
-      createRule,
-      updateRule,
-      deleteRule,
-      acknowledgeNotification,
-      pauseNotifications,
-      resumeNotifications,
-      snap,
-      analysis,
-      status,
-      importReport,
-      busy,
-      hydrated,
-      now,
-      loadData,
-      loadFiles,
-      addTestEvents,
-      runAnalysis,
-      reset,
-      archiveOverride,
-      setArchiveOverride,
-    };
+  return {
+    createRule,
+    updateRule,
+    deleteRule,
+    acknowledgeNotification,
+    pauseNotifications,
+    resumeNotifications,
+    snap,
+    analysis,
+    status,
+    importReport,
+    busy,
+    hydrated,
+    now,
+    loadData,
+    loadFiles,
+    addTestEvents,
+    runAnalysis,
+    reset,
+    archiveOverride,
+    setArchiveOverride,
+  };
 }

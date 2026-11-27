@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -30,20 +29,13 @@ import {
   SidebarTrigger,
 } from "@/components/animate-ui/components/radix/sidebar";
 
-import { NotificationsSheet } from "@/components/visual/notifications-sheet";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/animate-ui/components/radix/sheet";
 import {
   Tabs,
   TabsList,
   TabsTrigger,
 } from "@/components/animate-ui/components/radix/tabs";
 
+import { NotificationsSheet } from "@/components/visual/notifications-sheet";
 import { OutboxSheet } from "@/components/visual/outbox-sheet";
 import { useOutbox } from "@/components/visual/use-outbox";
 import { RuleEditor } from "@/components/visual/rule-editor";
@@ -83,9 +75,7 @@ const severityLabel: Record<Severity, string> = {
 function eventTitle(event: CdmEvent) {
   const cdm = latestRevision(event).cdm;
 
-  return `${cdm.sat1.name ?? cdm.sat1.designator} / ${
-    cdm.sat2.name ?? cdm.sat2.designator
-  }`;
+  return `${cdm.sat1.name ?? cdm.sat1.designator} / ${cdm.sat2.name ?? cdm.sat2.designator}`;
 }
 
 function formatTca(hours: number) {
@@ -186,9 +176,9 @@ export function VisualDashboard({
   const [selected, setSelected] = useState<number | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
 
-  const [view, setView] = useState<
-    "operator" | "specialist" | "calculations"
-  >("operator");
+  const [view, setView] = useState<"operator" | "specialist" | "calculations">(
+    "operator"
+  );
 
   const [reportOpen, setReportOpen] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
@@ -273,8 +263,8 @@ export function VisualDashboard({
       setDetailsOpen(false);
       setReportOpen(false);
       setRulesOpen(false);
-      setOutboxOpen(false);
       setPauseOpen(false);
+      setOutboxOpen(false);
       setNotificationsOpen(false);
       setView("operator");
     });
@@ -430,7 +420,6 @@ export function VisualDashboard({
                     onClick={() => setReportOpen(true)}
                     disabled={!importReport}
                     tooltip="View import report"
-                    aria-label="View import report"
                   >
                     <FileText />
                     <span>View import report</span>
@@ -440,9 +429,9 @@ export function VisualDashboard({
             </SidebarGroupContent>
 
             <p
-              className="cads-sidebar-state"
+              className="cads-sidebar-status"
               role={
-                status.toLowerCase().includes("error")
+                status.startsWith("Error:")
                   ? "alert"
                   : "status"
               }
@@ -587,7 +576,6 @@ export function VisualDashboard({
                   aria-label="Manage event notifications"
                 >
                   <BellOff className="size-4" />
-
                   {isPaused(event.id)
                     ? "Notifications paused — manage"
                     : "Mute / Snooze notifications"}
@@ -619,11 +607,7 @@ export function VisualDashboard({
                     selected
                     onSelect={() => selectEvent(event.id)}
                     onOpenDetails={openSpecialist}
-                    view={
-                      view === "operator"
-                        ? "operator"
-                        : "specialist"
-                    }
+                    view={view === "operator" ? "operator" : "specialist"}
                     cautiousLanguage
                   />
 

@@ -1,4 +1,3 @@
-
 "use client";
 
 import {
@@ -13,6 +12,8 @@ import type {
   DeliveryStatus,
   OutboxEntry,
 } from "@/lib/cads/outbox";
+
+import { getNotificationHandler } from "@/lib/cads/notification-handlers";
 
 const STATUS_LABELS: Record<DeliveryStatus, string> = {
   pending: "Pending",
@@ -127,7 +128,7 @@ export function OutboxSheet({
                 </div>
 
                 <div className="space-y-1 text-xs text-muted-foreground">
-                  <p>Channel: Local</p>
+                  <p>Channel: {getNotificationHandler(entry.channel).label}</p>
                   <p>Attempts: {entry.attempts}</p>
                   <p>
                     Last updated:{" "}
@@ -157,7 +158,9 @@ export function OutboxSheet({
 
                 {entry.status === "sent" && (
                   <p className="text-xs text-emerald-600">
-                    Delivery completed locally.
+                    {entry.channel === "local"
+                      ? "Delivery completed locally."
+                      : `${getNotificationHandler(entry.channel).label} delivery recorded. No external message was sent.`}
                   </p>
                 )}
 
