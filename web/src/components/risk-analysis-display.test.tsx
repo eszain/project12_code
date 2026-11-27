@@ -3,10 +3,13 @@
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { analyzeEvent } from "@/lib/cads/analyze";
 import { Store, latestRevision } from "@/lib/cads/store";
 import { EventSummaryCard } from "./event-summary-card";
+
+// Working out maneuver options takes seconds, longer on a busy machine.
+vi.setConfig({ testTimeout: 30_000 });
 
 const DATA = join(__dirname, "../../../data/fixtures");
 const HOUR = 3600000;

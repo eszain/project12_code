@@ -54,6 +54,7 @@ import { CalculationDetails } from "@/components/calculation-details";
 import { CalculationsMathView } from "@/components/visual/calculations-math-view";
 import { ConjunctionPlayer } from "@/components/visual/conjunction-player";
 import { ConjunctionGlobe } from "@/components/visual/conjunction-globe";
+import { ManeuverOptions } from "@/components/maneuver-options";
 import { ImportReportSheet } from "@/components/import-report-sheet";
 import { OriginalCdm } from "@/components/original-cdm";
 import { useCadsSession } from "@/components/use-cads-session";
@@ -716,6 +717,8 @@ export function VisualDashboard({
                   {view === "specialist" && (
                     <>
                       <CdmHistory event={event} />
+
+                      <ManeuverOptions cdm={current} />
 
                       <ExplanationCard
                         event={event}

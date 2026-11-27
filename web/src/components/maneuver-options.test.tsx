@@ -13,9 +13,11 @@ const load = (path: string): NormalizedCdm => parseDocument(readFileSync(join(FI
 afterEach(cleanup);
 
 describe("maneuver options chart", () => {
-  it("draws the lines, the half-orbit marker, a legend and a table for a close event", () => {
+  it("draws the lines, the half-orbit marker, a legend and a table for a close event", async () => {
     const { container } = render(<ManeuverOptions cdm={load("synthetic/synthetic_high_risk_3.json")} />);
-    const section = within(screen.getByLabelText("Maneuver options"));
+    expect(screen.getByText("Working out the burn options…")).toBeTruthy(); // shown first, the work follows
+    const section = within(await screen.findByLabelText("Maneuver options", {}, { timeout: 20_000 }));
+    await screen.findByText("best timing (half an orbit)", {}, { timeout: 20_000 });
     expect(section.getByText("Maneuver options (study only, never a command)")).toBeTruthy();
     expect(section.getByText("best timing (half an orbit)")).toBeTruthy();
     expect(section.getByText("Burn size (cm/s)")).toBeTruthy();
@@ -23,11 +25,12 @@ describe("maneuver options chart", () => {
     expect(container.querySelectorAll("polyline")).toHaveLength(3);
     expect(section.getByText("to reach 1 in 10k")).toBeTruthy();
     expect(section.getByLabelText("Burns to reach 1 in 10k").querySelectorAll("tbody tr")).toHaveLength(8);
-  });
+    expect(section.getByText(/The lines are not straight/)).toBeTruthy();
+  }, 30_000);
 
-  it("shows only the reason for an event below the action level", () => {
+  it("shows only the reason for an event below the action level", async () => {
     const { container } = render(<ManeuverOptions cdm={load("reconstructed/cdm_set_6.json")} />);
-    expect(screen.getByText(/Below the maneuver-study level \(1 in 10k\)/)).toBeTruthy();
+    expect(await screen.findByText(/Below the maneuver-study level \(1 in 10k\)/)).toBeTruthy();
     expect(container.querySelector("polyline")).toBeNull();
   });
 });

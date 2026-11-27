@@ -77,10 +77,12 @@ export function riskChecks(event: CdmEvent, nowMs: number): RiskCheck[] {
     ? `Not available (${e.reason})`
     : e.zone === "green"
       ? `Green zone: worst of 3 methods is ${odds(e.worst.pc)}, extra analysis not needed`
-      : `${e.zone.toUpperCase()} zone: worst of 3 methods is ${odds(e.worst.pc)} (${e.worst.name}${e.worst.note ? `, ${e.worst.note}` : ""})`;
+      : `${e.zone.toUpperCase()} zone: worst of 3 methods is ${odds(e.worst.pc)} (${e.worst.name}${e.worst.note ? `, ${e.worst.note}` : ""}); a worst case, not the CDM rating`;
 
   // 7. Maneuver options: generated only for events at or above the action level (maneuver-space.ts). A study only.
-  const space = maneuverOptionSpace(cdm);
+  // Only what the sentence needs: the 1 in 10,000 line at half an orbit and 48 h. The full chart (three targets, eight
+  // lead times) takes seconds and is worked out only when the chart is shown. This runs while an event card renders.
+  const space = maneuverOptionSpace(cdm, { targets: [CONFIG.pcAction], leadHours: [48] });
   let maneuver = `Not generated: ${space.available ? "" : space.reason}`;
   if (space.available) {
     const line = space.lines[0];

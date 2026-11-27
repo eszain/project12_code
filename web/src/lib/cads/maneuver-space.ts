@@ -57,13 +57,17 @@ export interface ManeuverSpaceOptions {
   spacecraft?: Spacecraft;
 }
 
-const cache = new WeakMap<NormalizedCdm, ManeuverSpace>();
+// One result per CDM and per set of options. Working out a full space takes seconds, so it is worth keeping.
+const cache = new WeakMap<NormalizedCdm, Map<string, ManeuverSpace>>();
 
 export function maneuverOptionSpace(cdm: NormalizedCdm, opts: ManeuverSpaceOptions = {}): ManeuverSpace {
-  const usesDefaults = Object.keys(opts).length === 0;
-  if (usesDefaults && cache.has(cdm)) return cache.get(cdm)!;
+  const key = JSON.stringify(opts);
+  let perCdm = cache.get(cdm);
+  if (!perCdm) cache.set(cdm, (perCdm = new Map()));
+  const hit = perCdm.get(key);
+  if (hit) return hit;
   const result = compute(cdm, opts);
-  if (usesDefaults) cache.set(cdm, result);
+  perCdm.set(key, result);
   return result;
 }
 

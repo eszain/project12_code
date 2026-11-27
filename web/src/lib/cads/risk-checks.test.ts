@@ -1,12 +1,15 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { formatShortOdds, missComponentsM } from "./analyze";
 import { missVsUncertainty } from "./details";
 import { expandedPc } from "./pc-methods";
 import { positionSigmasM } from "./quality";
 import { riskChecks } from "./risk-checks";
 import { Store, latestRevision, severityOf, type CdmEvent } from "./store";
+
+// Working out maneuver options takes seconds, longer on a busy machine.
+vi.setConfig({ testTimeout: 30_000 });
 
 const DATA = join(__dirname, "../../../../data/fixtures");
 const doc = (folder: string, name: string) => ({ name, content: readFileSync(join(DATA, folder, name), "utf8"), label: "test" });

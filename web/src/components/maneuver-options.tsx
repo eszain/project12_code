@@ -5,9 +5,9 @@
 // before the closest approach it is done. A dashed marker shows half an orbit before TCA, where a burn moves the
 // satellite furthest. A study only: CADS never commands a spacecraft.
 
-import { useMemo } from "react";
+import { useEffect, useState } from "react";
 import { formatShortOdds } from "@/lib/cads/analyze";
-import { maneuverOptionSpace, type IsoLine } from "@/lib/cads/maneuver-space";
+import { maneuverOptionSpace, type IsoLine, type ManeuverSpace } from "@/lib/cads/maneuver-space";
 import type { NormalizedCdm } from "@/lib/cads/parser";
 
 const W = 560;
@@ -16,8 +16,22 @@ const PAD = { l: 76, r: 20, t: 20, b: 56 };
 const DASH = ["", "6 3", "2 3"]; // one line style per target
 
 export function ManeuverOptions({ cdm }: { cdm: NormalizedCdm }) {
-  const space = useMemo(() => maneuverOptionSpace(cdm), [cdm]);
+  // Working out the full space takes seconds, so show a message first and compute afterwards.
+  const [result, setResult] = useState<{ cdm: NormalizedCdm; space: ManeuverSpace } | null>(null);
+  useEffect(() => {
+    const id = setTimeout(() => setResult({ cdm, space: maneuverOptionSpace(cdm) }), 30);
+    return () => clearTimeout(id);
+  }, [cdm]);
+  const space = result?.cdm === cdm ? result.space : null;
 
+  if (!space) {
+    return (
+      <section className="ops-block" aria-label="Maneuver options">
+        <div className="ops-block-title">Maneuver options (study only, never a command)</div>
+        <div className="ops-row" role="status">Working out the burn options…</div>
+      </section>
+    );
+  }
   if (!space.available) {
     return (
       <section className="ops-block" aria-label="Maneuver options">
@@ -94,6 +108,9 @@ export function ManeuverOptions({ cdm }: { cdm: NormalizedCdm }) {
           ))}
         </tbody>
       </table>
+      <div className="ops-row ops-row-label">
+        The lines are not straight: how much a burn moves the satellite depends on where in its orbit it happens, so the smallest burn rises and falls with the lead time.
+      </div>
       <div className="ops-row ops-row-label">
         Assumed spacecraft: {space.spacecraft.massKg} kg, Isp {space.spacecraft.ispS} s (to be confirmed with CSA). {space.limitations[0]}
       </div>
