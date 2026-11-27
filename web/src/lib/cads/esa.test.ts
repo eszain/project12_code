@@ -7,6 +7,7 @@ import {
   ESA_PAUSE_MS,
   ESA_TCA,
   ESA_TCA_LEAD_DAYS,
+  ESA_TCA_SPREAD_DAYS,
   collisionProbabilityText,
   dripBatches,
   fetchEsaSample,
@@ -121,7 +122,7 @@ describe("ESA row mapping", () => {
     expect(record.SAT1_X_DOT).toBeUndefined();
     expect(record.SAT2_Y).toBeUndefined();
     expect(record.SAT2_Z_DOT).toBeUndefined();
-    expect(record.SAT1_OBJECT_NAME).toBe("ESA mission 7");
+    expect(record.SAT1_OBJECT_NAME).toBe("ESA event 101 (mission 7)");
     expect(record.SAT2_OBJECT_NAME).toBe("DEBRIS object");
     expect(record.SAT1_OBJECT_DESIGNATOR).toBe("ESA-7-101");
     expect(record.SAT2_OBJECT_DESIGNATOR).toBe("ESA-C-101");
@@ -143,18 +144,65 @@ describe("ESA row mapping", () => {
     expect(severityOf(cdm.pc)).toBe("ACTION");
   });
 
-  it("pauses briefly after every 5 CDMs, and reports a missing sample", async () => {
-    expect(ESA_PAUSE_MS).toBe(400);
+  it("pauses briefly after every 10 CDMs, and reports a missing sample", async () => {
+    expect(ESA_PAUSE_MS).toBe(300);
     expect(dripBatches([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])).toEqual([
-      [1, 2, 3, 4, 5],
-      [6, 7, 8, 9, 10],
+      [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
       [11, 12],
     ]);
-    expect(shouldPauseAfter(4, 12, 5)).toBe(true);
-    expect(shouldPauseAfter(5, 12, 5)).toBe(false);
-    expect(shouldPauseAfter(4, 5, 5)).toBe(false);
+    expect(dripBatches([1, 2, 3, 4, 5, 6, 7], 3)).toEqual([[1, 2, 3], [4, 5, 6], [7]]);
+    expect(shouldPauseAfter(9, 12)).toBe(true);
+    expect(shouldPauseAfter(10, 12)).toBe(false);
+    expect(shouldPauseAfter(9, 10)).toBe(false); // nothing left to wait for
     const docs = await fetchEsaSample(async () => ({ ok: false, json: async () => ({}) }));
     expect(docs).toBeNull();
+  });
+
+  it("spreads the events over the coming days, with every message of an event moving together", async () => {
+    const make = (designator: string, created: string) => ({ SAT1_OBJECT_DESIGNATOR: designator, TCA: ESA_TCA, CREATION_DATE: created });
+    const manifest = {
+      tca: ESA_TCA,
+      files: ["a", "b", "c", "d"],
+      cdms: [make("ESA-2-1", "2026-11-27T00:00:00.000Z"), make("ESA-2-1", "2026-11-30T00:00:00.000Z"), make("ESA-5-2", "2026-11-28T00:00:00.000Z"), make("ESA-9-T3", "2026-11-29T00:00:00.000Z")],
+    };
+    const now = Date.UTC(2027, 5, 1, 9, 30);
+    const docs = (await fetchEsaSample(async () => ({ ok: true, json: async () => structuredClone(manifest) }), now))!;
+    const rec = docs.map((d) => JSON.parse(d.content));
+    const week = now + ESA_TCA_LEAD_DAYS * 86400000;
+    const tcas = rec.map((r) => Date.parse(r.TCA));
+    expect(tcas[0]).toBe(tcas[1]); // two messages of one event share a closest approach
+    expect(Date.parse(rec[1].CREATION_DATE) - Date.parse(rec[0].CREATION_DATE)).toBe(3 * 86400000); // and keep their spacing
+    expect(new Set(tcas).size).toBe(3); // three events, three different times
+    for (const t of tcas) {
+      expect(t).toBeLessThanOrEqual(week);
+      expect(t).toBeGreaterThan(week - ESA_TCA_SPREAD_DAYS * 86400000);
+    }
+    const again = (await fetchEsaSample(async () => ({ ok: true, json: async () => structuredClone(manifest) }), now))!;
+    expect(again.map((d) => JSON.parse(d.content).TCA)).toEqual(rec.map((r) => r.TCA)); // the same spread every time
+  });
+
+  it("reads a manifest that holds every message, and re-dates them the same way", async () => {
+    const manifest = {
+      tca: ESA_TCA,
+      files: ["esa_0001.json", "esa_0002.json"],
+      cdms: [
+        { TCA: ESA_TCA, CREATION_DATE: "2026-11-27T00:00:00.000Z", MISS_DISTANCE: "300" },
+        { TCA: ESA_TCA, CREATION_DATE: "2026-11-30T12:00:00.000Z", MISS_DISTANCE: "250" },
+      ],
+    };
+    const requested: string[] = [];
+    const now = Date.UTC(2027, 5, 1, 9, 30);
+    const docs = (await fetchEsaSample(async (url) => {
+      requested.push(url);
+      return { ok: true, json: async () => structuredClone(manifest) };
+    }, now))!;
+    expect(requested).toEqual(["/esa-sample/manifest.json"]); // one request, not one per message
+    expect(docs.map((d) => d.name)).toEqual(["esa_0001.json", "esa_0002.json"]);
+    const [a, b] = docs.map((d) => JSON.parse(d.content));
+    const tca = now + ESA_TCA_LEAD_DAYS * 86400000;
+    expect(Date.parse(a.TCA)).toBe(tca);
+    expect(Date.parse(b.CREATION_DATE)).toBe(tca - 12 * 3600000);
+    await expect(fetchEsaSample(async () => ({ ok: true, json: async () => ({ files: ["a"], cdms: [] }) }), now)).rejects.toThrow(/different number/);
   });
 
   it("moves the sample's closest approach to a week from now, keeping the spacing between messages", async () => {
