@@ -35,13 +35,13 @@ describe("risk analysis in the event summary card", () => {
     for (const view of ["operator", "specialist"] as const) {
       render(<EventSummaryCard event={event} analysis={analyzeEvent(event, now)} now={now} selected onSelect={() => {}} view={view} />);
       const block = within(screen.getByLabelText("Risk analysis"));
-      expect(block.getByText(/1 in 2,571: at or above the action level/)).toBeTruthy();
-      expect(block.getByText("Rising: 1 in 5,528 to 1 in 2,571")).toBeTruthy();
-      expect(block.getByText(/62 m miss \/ 117 m uncertainty = 0.5x, so low confidence/)).toBeTruthy();
-      expect(block.getByText("15.7 h until closest approach")).toBeTruthy();
-      expect(block.getByText(/radial uncertainty = .*x, so nearly the same altitude/)).toBeTruthy();
-      expect(block.getByText(/^RED zone: worst of 3 methods is 1 in/)).toBeTruthy();
-      expect(block.getByText(/^Study only: to reach 1 in 10k, .* half an orbit/)).toBeTruthy();
+      expect(block.getByText(/^1 in 2,571, at or above action limit 1 in 10k: ACTION$/)).toBeTruthy();
+      expect(block.getByText("Rising: 1 in 5,528 → 1 in 2,571")).toBeTruthy();
+      expect(block.getByText(/62 m miss \/ 117 m 1σ = 0\.5σ \(low confidence\)/)).toBeTruthy();
+      expect(block.getByText("15.7 h")).toBeTruthy();
+      expect(block.getByText(/^\|ΔR\| 9 m, σR 18 m = 0\.5σ \(within 1σ\)$/)).toBeTruthy();
+      expect(block.getByText(/^RED: worst case 1 in/)).toBeTruthy();
+      expect(block.getByText(/^Study only\. Δv to reach 1 in 10k: .*\(½ orbit\)/)).toBeTruthy();
       cleanup();
     }
   });

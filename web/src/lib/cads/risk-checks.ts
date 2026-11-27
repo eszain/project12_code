@@ -1,12 +1,12 @@
 // Risk analysis checks, shown after "Run risk analysis" (issue #9: the numbers behind the specialist view).
 //
 // Seven checks on the latest CDM of an event:
-//   1. Probability level  Pc from the CDM against the action level (1 in 10,000) and watch level (1 in 10 million)
-//   2. Trend              this CDM's Pc compared with the previous CDM's Pc
-//   3. Confidence         miss distance / combined position uncertainty along the miss direction
-//   4. Time to act        TCA - now
+//   1. Pc level           Pc from the CDM against the action level (1 in 10,000) and watch level (1 in 10 million)
+//   2. Pc trend           this CDM's Pc compared with the previous CDM's Pc
+//   3. Miss / σ           miss distance / combined position 1σ along the miss direction
+//   4. Time to TCA        TCA - now
 //   5. Radial separation  altitude difference / combined altitude uncertainty
-//   6. Expanded analysis  worst case of three Pc methods (pc-methods.ts) and its green / yellow / red zone
+//   6. Expanded Pc        worst case of three Pc methods (pc-methods.ts) and its green / yellow / red zone
 //   7. Maneuver options   smallest burn to reach 1 in 10,000, only for events at the action level (maneuver-space.ts)
 // The severity itself still comes only from the CDM's Pc; these checks add context for the operator.
 
@@ -25,82 +25,86 @@ export interface RiskCheck {
 }
 
 const fmtM = (m: number) => (m >= 10000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m).toLocaleString("en-US")} m`);
+const fmtRatio = (r: number) => (r >= 10 ? r.toFixed(0) : r.toFixed(1));
+/** Pc as "1 in N" odds; an exact 0 stays 0. */
+const odds = (pc: number | null) => (pc === 0 ? "0" : formatShortOdds(pc));
 
 export function riskChecks(event: CdmEvent, nowMs: number): RiskCheck[] {
   const cdm = latestRevision(event).cdm;
   const previous = event.revisions.length > 1 ? event.revisions[event.revisions.length - 2].cdm : null;
-  const odds = formatShortOdds;
 
-  // 1. Probability level: Pc against the action and watch levels.
+  // 1. Pc level against the action and watch limits.
   const severity = severityOf(cdm.pc);
   const level =
-    severity === "UNKNOWN" ? "Not provided in the CDM, so the event cannot be rated"
-    : severity === "ZERO" ? "Reported as 0 in the CDM (below 1 in a billion): CLEAR"
-    : severity === "ACTION" ? `${odds(cdm.pc)}: at or above the action level of ${odds(CONFIG.pcAction)}, so ACTION`
-    : severity === "WATCH" ? `${odds(cdm.pc)}: between the watch level of ${odds(CONFIG.pcWatch)} and the action level of ${odds(CONFIG.pcAction)}, so WATCH`
-    : `${odds(cdm.pc)}: below the watch level of ${odds(CONFIG.pcWatch)}, so LOW`;
+    severity === "UNKNOWN" ? "No Pc in CDM: unrated"
+    : severity === "ZERO" ? "CDM Pc = 0: CLEAR"
+    : severity === "ACTION" ? `${odds(cdm.pc)}, at or above action limit ${odds(CONFIG.pcAction)}: ACTION`
+    : severity === "WATCH" ? `${odds(cdm.pc)}, between watch ${odds(CONFIG.pcWatch)} and action ${odds(CONFIG.pcAction)}: WATCH`
+    : `${odds(cdm.pc)}, below watch limit ${odds(CONFIG.pcWatch)}: LOW`;
 
-  // 2. Trend: is the collision chance going up or down since the previous CDM?
+  // 2. Pc trend: previous CDM to latest CDM.
   const change = previous ? pcChange(previous.pc, cdm.pc) : null;
+  const step = previous ? `${odds(previous.pc)} → ${odds(cdm.pc)}` : "";
   const trend =
-    change === null ? "Only one CDM so far, nothing to compare yet"
-    : change === "higher" ? `Rising: ${odds(previous!.pc)} to ${odds(cdm.pc)}`
-    : change === "lower" ? `Falling: ${odds(previous!.pc)} to ${odds(cdm.pc)}`
-    : change === "same" ? `No change: ${odds(cdm.pc)}`
-    : "Cannot compare: a CDM has no Pc";
+    change === null ? "Single CDM: no trend yet"
+    : change === "higher" ? `Rising: ${step}`
+    : change === "lower" ? `Falling: ${step}`
+    : change === "same" ? `Unchanged: ${odds(cdm.pc)}`
+    : "Unavailable: a CDM has no Pc";
 
-  // 3. Confidence: how many "uncertainty widths" the objects miss by.
+  // 3. Miss distance in units of the combined 1-sigma along the miss direction.
   const m = missVsUncertainty(cdm);
-  const confidence = m.available
-    ? `${fmtM(m.missPlaneM)} miss / ${fmtM(m.sigmaAlongMissM)} uncertainty = ${m.ratio >= 10 ? m.ratio.toFixed(0) : m.ratio.toFixed(1)}x, so ${m.confidence} confidence`
-    : `Not available (${m.reason})`;
+  const missSigma = m.available
+    ? `${fmtM(m.missPlaneM)} miss / ${fmtM(m.sigmaAlongMissM)} 1σ = ${fmtRatio(m.ratio)}σ (${m.confidence} confidence)`
+    : `Unavailable: ${m.reason}`;
 
-  // 4. Time to act: hours until the closest approach.
+  // 4. Time to TCA.
   const h = hoursBetween(nowMs, cdm.tca);
-  const time = h >= 0 ? `${h.toFixed(1)} h until closest approach` : `Closest approach passed ${(-h).toFixed(1)} h ago`;
+  const time = h >= 0 ? `${h.toFixed(1)} h` : `TCA passed ${(-h).toFixed(1)} h ago`;
 
-  // 5. Radial separation: how far apart in altitude, against the altitude uncertainty. Objects at nearly the same
-  //    altitude are more concerning than objects passing at different altitudes (CSA, Nov 13).
+  // 5. Radial separation against the combined radial sigma. A small radial gap means the objects cross at nearly the
+  //    same altitude, which CSA treats as more concerning (Nov 13).
   const split = missComponentsM(cdm);
   const sig1 = positionSigmasM(cdm.sat1);
   const sig2 = positionSigmasM(cdm.sat2);
-  let radial = "Not available (no relative position or covariance)";
+  let radial = "Unavailable: no relative position or covariance";
   if (split && sig1 && sig2) {
     const sigmaR = Math.hypot(sig1[0], sig2[0]);
     const ratio = split.radial / sigmaR;
-    radial = `${fmtM(split.radial)} radial / ${fmtM(sigmaR)} radial uncertainty = ${ratio >= 10 ? ratio.toFixed(0) : ratio.toFixed(1)}x, so ${ratio < 1 ? "nearly the same altitude" : "different altitudes"}`;
+    radial = `|ΔR| ${fmtM(split.radial)}, σR ${fmtM(sigmaR)} = ${fmtRatio(ratio)}σ (${ratio < 1 ? "within" : "outside"} 1σ)`;
   }
 
-  // 6. Expanded analysis: the worst case of three Pc methods, and its zone. Advisory only: severity still comes from the CDM's Pc.
+  // 6. Expanded Pc: worst case of three methods, and its zone. Advisory only: severity still comes from the CDM's Pc.
   const e = expandedPc(cdm);
-  const expanded = !e.available
-    ? `Not available (${e.reason})`
-    : e.zone === "green"
-      ? `Green zone: worst of 3 methods is ${odds(e.worst.pc)}, extra analysis not needed`
-      : `${e.zone.toUpperCase()} zone: worst of 3 methods is ${odds(e.worst.pc)} (${e.worst.name}${e.worst.note ? `, ${e.worst.note}` : ""}); a worst case, not the CDM rating`;
+  let expanded = e.available ? "" : `Unavailable: ${e.reason}`;
+  if (e.available) {
+    const [foster, chan] = e.methods;
+    expanded = `${e.zone.toUpperCase()}: worst case ${odds(e.worst.pc)} (${e.worst.note ?? e.worst.name}); Foster ${odds(foster.pc)}, Chan ${odds(chan.pc)}` +
+      (e.zone === "green" ? "" : "; a worst case, not the CDM rating");
+  }
 
   // 7. Maneuver options: generated only for events at or above the action level (maneuver-space.ts). A study only.
   // Only what the sentence needs: the 1 in 10,000 line at half an orbit and 48 h. The full chart (three targets, eight
   // lead times) takes seconds and is worked out only when the chart is shown. This runs while an event card renders.
   const space = maneuverOptionSpace(cdm, { targets: [CONFIG.pcAction], leadHours: [48] });
-  let maneuver = `Not generated: ${space.available ? "" : space.reason}`;
+  let maneuver = space.available ? "" : space.reason;
   if (space.available) {
     const line = space.lines[0];
-    const burn = (p: OptionPoint) => (p.dvMs === null ? "not reachable with up to 1 m/s" : p.dvMs === 0 ? "no burn needed" : `${(p.dvMs * 100).toFixed(2)} cm/s`);
+    const burn = (p: OptionPoint) => (p.dvMs === null ? "not reachable (> 1 m/s)" : p.dvMs === 0 ? "no burn needed" : `${(p.dvMs * 100).toFixed(2)} cm/s ${p.direction}`);
     const half = line.points.find((p) => p.leadTimeH === space.halfOrbitH)!;
     const reachable = line.points.filter((p) => p.dvMs !== null);
     const cheapest = reachable.length ? reachable.reduce((a, b) => (b.dvMs! < a.dvMs! ? b : a)) : null;
-    maneuver = `Study only: to reach ${odds(line.targetPc)}, ${burn(half)} half an orbit (${half.leadTimeH.toFixed(1)} h) before TCA` +
-      (cheapest && cheapest !== half ? `, or ${burn(cheapest)} ${cheapest.leadTimeH} h before` : "");
+    maneuver = `Study only. Δv to reach ${odds(line.targetPc)}: ${burn(half)} at TCA−${half.leadTimeH.toFixed(1)} h (½ orbit)` +
+      (cheapest && cheapest !== half ? `; ${burn(cheapest)} at TCA−${cheapest.leadTimeH} h` : "");
   }
 
   return [
-    { name: "Probability level", result: level },
-    { name: "Trend", result: trend },
-    { name: "Confidence", result: confidence },
-    { name: "Time to act", result: time },
+    { name: "Pc level", result: level },
+    { name: "Pc trend", result: trend },
+    { name: "Miss / σ", result: missSigma },
+    { name: "Time to TCA", result: time },
     { name: "Radial separation", result: radial },
-    { name: "Expanded analysis", result: expanded },
+    { name: "Expanded Pc", result: expanded },
     { name: "Maneuver options", result: maneuver },
   ];
 }

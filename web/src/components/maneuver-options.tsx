@@ -59,7 +59,7 @@ export function ManeuverOptions({ cdm }: { cdm: NormalizedCdm }) {
   return (
     <section className="ops-block" aria-label="Maneuver options">
       <div className="ops-block-title">Maneuver options (study only, never a command)</div>
-      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Smallest burn against hours before closest approach. ${summary}`} className="chart">
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Smallest Δv against hours before TCA. ${summary}`} className="chart">
         {yTicks.map((v) => (
           <g key={v}>
             <line x1={PAD.l} x2={W - PAD.r} y1={py(v)} y2={py(v)} className="chart-grid" strokeDasharray="3 3" />
@@ -71,13 +71,13 @@ export function ManeuverOptions({ cdm }: { cdm: NormalizedCdm }) {
         ))}
         {/* 3. Best timing: half an orbit before TCA. */}
         <line x1={px(space.halfOrbitH)} x2={px(space.halfOrbitH)} y1={PAD.t} y2={H - PAD.b} className="chart-threshold" strokeDasharray="5 3" />
-        <text x={px(space.halfOrbitH) + 6} y={PAD.t + 10} className="chart-threshold-label">best timing (half an orbit)</text>
+        <text x={px(space.halfOrbitH) + 6} y={PAD.t + 10} className="chart-threshold-label">½ orbit before TCA</text>
         {space.lines.map((l, i) => (
           <polyline key={l.targetPc} points={path(l)} className="chart-line" strokeDasharray={DASH[i % DASH.length]} />
         ))}
-        <text x={(PAD.l + W - PAD.r) / 2} y={H - 8} textAnchor="middle" className="chart-axis-title">Hours before closest approach (h, log scale)</text>
+        <text x={(PAD.l + W - PAD.r) / 2} y={H - 8} textAnchor="middle" className="chart-axis-title">Hours before TCA (log scale)</text>
         <g transform={`translate(20 ${(PAD.t + H - PAD.b) / 2}) rotate(-90)`}>
-          <text x="0" y="0" textAnchor="middle" className="chart-axis-title">Burn size (cm/s)</text>
+          <text x="0" y="0" textAnchor="middle" className="chart-axis-title">Δv (cm/s)</text>
         </g>
       </svg>
 
