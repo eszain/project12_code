@@ -516,6 +516,18 @@ function handleUserChange(userId: string) {
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     type="button"
+                    onClick={() => void session.loadEsaSample()}
+                    disabled={busy}
+                    tooltip="Load ESA sample"
+                  >
+                    <FileText />
+                    <span>Load ESA sample</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    type="button"
                     onClick={() => setRulesOpen(true)}
                     tooltip="Manage alert rules"
                   >
