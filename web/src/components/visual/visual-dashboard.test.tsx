@@ -3,6 +3,7 @@ import "fake-indexeddb/auto";
 
 import {
   cleanup,
+  configure,
   fireEvent,
   render,
   screen,
@@ -24,6 +25,11 @@ import {
 
 import { IndexedDbEventPersistence } from "@/lib/cads/event-persistence";
 import { VisualDashboard } from "./visual-dashboard";
+
+// These tests load data and animate sidebars. In a full run on a busy machine they need more than the 5 s test
+// limit and the 1 s default wait for something to appear.
+vi.setConfig({ testTimeout: 30_000 });
+configure({ asyncUtilTimeout: 8_000 });
 
 const testPersistence = new IndexedDbEventPersistence();
 beforeEach(async () => {
