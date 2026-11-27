@@ -1,9 +1,15 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { formatShortOdds, missComponentsM } from "./analyze";
 import { missVsUncertainty } from "./details";
+import { expandedPc } from "./pc-methods";
+import { positionSigmasM } from "./quality";
 import { riskChecks } from "./risk-checks";
 import { Store, latestRevision, severityOf, type CdmEvent } from "./store";
+
+// Working out maneuver options takes seconds, longer on a busy machine.
+vi.setConfig({ testTimeout: 30_000 });
 
 const DATA = join(__dirname, "../../../../data/fixtures");
 const doc = (folder: string, name: string) => ({ name, content: readFileSync(join(DATA, folder, name), "utf8"), label: "test" });
@@ -25,8 +31,30 @@ describe("risk analysis checks (issue #9)", () => {
   const checks = riskChecks(test, tca - 15.7 * HOUR);
   const result = (name: string) => checks.find((c) => c.name === name)!.result;
 
-  it("returns the four checks in order", () => {
-    expect(checks.map((c) => c.name)).toEqual(["Probability level", "Trend", "Confidence", "Time to act"]);
+  it("returns the seven checks in order", () => {
+    expect(checks.map((c) => c.name)).toEqual(["Probability level", "Trend", "Confidence", "Time to act", "Radial separation", "Expanded analysis", "Maneuver options"]);
+  });
+
+  it("7. gives the maneuver options only for events at the action level", () => {
+    expect(result("Maneuver options")).toMatch(/^Study only: to reach 1 in 10k, [\d.]+ cm\/s half an orbit \(0\.8 h\) before TCA, or [\d.]+ cm\/s 48 h before$/);
+    const [clear] = load([["reconstructed", "cdm_set_6.json"]]);
+    expect(riskChecks(clear, 0)[6].result).toBe("Not generated: Below the maneuver-study level (1 in 10k): no maneuver options computed.");
+  });
+
+  it("5. compares the altitude difference with the altitude uncertainty", () => {
+    const cdm = latestRevision(test).cdm;
+    const r = missComponentsM(cdm)!.radial;
+    const sigmaR = Math.hypot(positionSigmasM(cdm.sat1)![0], positionSigmasM(cdm.sat2)![0]);
+    expect(result("Radial separation")).toBe(`${Math.round(r)} m radial / ${Math.round(sigmaR)} m radial uncertainty = ${(r / sigmaR).toFixed(1)}x, so nearly the same altitude`);
+    const noCov = riskChecks({ ...test, revisions: [{ ...latestRevision(test), cdm: { ...cdm, sat2: { ...cdm.sat2, covarianceRtn: null } } }] }, 0);
+    expect(noCov[4].result).toBe("Not available (no relative position or covariance)");
+  });
+
+  it("6. reports the worst case of the three Pc methods and its zone", () => {
+    const e = expandedPc(latestRevision(test).cdm);
+    if (!e.available) throw new Error(e.reason);
+    expect(result("Expanded analysis")).toMatch(/^RED zone: worst of 3 methods is 1 in [\d,]+ \(/);
+    expect(result("Expanded analysis")).toContain(formatShortOdds(e.worst.pc));
   });
 
   it("1. rates the CDM's Pc against the action level", () => {
