@@ -17,21 +17,23 @@ The page starts empty (the database is wiped on every start; set `CADS_PERSIST=t
 
 Live demo: https://project12-code.vercel.app (also https://project12code.vercel.app)
 
-**Version 0.3 (beta).** New in this version:
-- **Near-miss player** in the centre of `/dashboard`: a plain-language verdict ("Safe pass", "Too close: a maneuver may be needed"), play / pause / reset, a scrub bar, Slower / Normal / Faster, and a clearly labelled "What if they hit? (imaginary)" burst. Built with GSAP and SVG.
-- **Left sidebar:** load sample data, run risk analysis, load your own CDM files, add test events, the import report, and the event list (one row per event).
-- **Right sidebar:** the chosen event in the operator or specialist view, with the original CDM fields (read-only).
-- **Notifications:** alert rules, an outbox with delivery status, and mute / snooze. Delivery is a local simulation only; no email or webhook is sent.
-- **Risk checks:** probability level, trend, confidence and time to act for each event.
-- **Saved session:** events survive a page refresh (IndexedDB in your browser). **Reset** clears them.
-- A CDM Pc of exactly 0 is shown as "less than 0.0000001%", never "0%".
+**Version 0.4.** New since v0.3, from the CSA meeting on Nov 13:
+- **3D view** under the near-miss player (CesiumJS, offline imagery, no token): both objects on Earth, a dashed gap line, and a replay from 10 s before the closest approach to 10 s after, slowing as they pass. Close-up and whole-Earth cameras. Positions come from a two-body orbit propagation of each object's CDM state vector.
+- **Centre layout:** Pc and miss-distance charts first (real hours before closest approach on the x-axis, with the action and watch levels), then the 2D player, then the 3D view.
+- **Real data:** a 30-event slice of the ESA Collision Avoidance Challenge data (475 messages, 18 events at the action level), loaded a few messages at a time with **Load ESA sample**. See `docs/esa-dataset.md`.
+- **Risk analysis:** three Pc methods (Foster, Chan and an expanded-covariance worst case) with a green / yellow / red zone, a radial-separation check, and a chart of the smallest burn against lead time. The burn study only runs for close events, and is labelled a study, never a command.
+- **Users:** a demo user switcher (Admin, CSA operator, Test operator). Each user sees only the events of their subscribed satellites. These are mock users, not real login.
+- **Notifications:** acknowledge a notification (who, when, a note), and choose per rule where it is recorded: in-app, mock webhook or mock email. Nothing is ever sent outside the browser.
+- **Percentages only:** every probability is a percentage, and none is ever shown as zero: a very small or zero Pc reads "< 0.0000001%". The original CDM text is in **View original CDM**.
 
-Still experimental: the recalculated Pc has not been validated against NASA CARA reference cases. Severity always comes from the source Pc in the CDM.
+From v0.3: the near-miss player with its "What if they hit? (imaginary)" burst, the two sidebars (data and events on the left, event details on the right), alert rules with an outbox, the risk checks, and a session that survives a refresh (IndexedDB in your browser; **Reset** clears it).
+
+Still experimental, and to confirm with CSA: the recalculated Pc has not been validated against NASA CARA reference cases; the 0.5x to 3x covariance range, the yellow-zone limits and the spacecraft mass used in the burn study are our assumptions. Severity always comes from the source Pc in the CDM.
 
 | Route | What it shows |
 |---|---|
 | `/` | Landing page: 3D Earth with orbits, feature overview, **Open Dashboard** |
-| `/dashboard` | The visual dashboard (v0.3 beta): data and event list on the left, near-miss player in the centre, event details on the right |
+| `/dashboard` | The visual dashboard (v0.4): data and event list on the left; charts, near-miss player and 3D view in the centre; event details on the right |
 | `/old-dashboard` | The v0.2.5 console: Operator / Specialist views, CDM history and trend charts, plain-language explanation |
 | `/site-visit` | Evidence for the Fall Agile Site Visit rubric, one section per criterion, with the as-built architecture and UML diagrams (sources in `docs/diagrams`) |
 | `/events`, `/analysis`, `/alerts` | Placeholder pages for planned features |
