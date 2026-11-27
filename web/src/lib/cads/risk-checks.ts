@@ -1,14 +1,18 @@
 // Risk analysis checks, shown after "Run risk analysis" (issue #9: the numbers behind the specialist view).
 //
-// Four checks on the latest CDM of an event, each built from numbers the dashboard already shows:
+// Six checks on the latest CDM of an event:
 //   1. Probability level  Pc from the CDM against the action level (1 in 10,000) and watch level (1 in 10 million)
 //   2. Trend              this CDM's Pc compared with the previous CDM's Pc
 //   3. Confidence         miss distance / combined position uncertainty along the miss direction
 //   4. Time to act        TCA - now
+//   5. Radial separation  altitude difference / combined altitude uncertainty
+//   6. Expanded analysis  worst case of three Pc methods (pc-methods.ts) and its green / yellow / red zone
 // The severity itself still comes only from the CDM's Pc; these checks add context for the operator.
 
-import { formatShortOdds } from "./analyze";
+import { formatShortOdds, missComponentsM } from "./analyze";
 import { missVsUncertainty } from "./details";
+import { expandedPc } from "./pc-methods";
+import { positionSigmasM } from "./quality";
 import { CONFIG, latestRevision, severityOf, type CdmEvent } from "./store";
 import { hoursBetween } from "./time";
 import { pcChange } from "./trend";
@@ -53,10 +57,32 @@ export function riskChecks(event: CdmEvent, nowMs: number): RiskCheck[] {
   const h = hoursBetween(nowMs, cdm.tca);
   const time = h >= 0 ? `${h.toFixed(1)} h until closest approach` : `Closest approach passed ${(-h).toFixed(1)} h ago`;
 
+  // 5. Radial separation: how far apart in altitude, against the altitude uncertainty. Objects at nearly the same
+  //    altitude are more concerning than objects passing at different altitudes (CSA, Nov 13).
+  const split = missComponentsM(cdm);
+  const sig1 = positionSigmasM(cdm.sat1);
+  const sig2 = positionSigmasM(cdm.sat2);
+  let radial = "Not available (no relative position or covariance)";
+  if (split && sig1 && sig2) {
+    const sigmaR = Math.hypot(sig1[0], sig2[0]);
+    const ratio = split.radial / sigmaR;
+    radial = `${fmtM(split.radial)} radial / ${fmtM(sigmaR)} radial uncertainty = ${ratio >= 10 ? ratio.toFixed(0) : ratio.toFixed(1)}x, so ${ratio < 1 ? "nearly the same altitude" : "different altitudes"}`;
+  }
+
+  // 6. Expanded analysis: the worst case of three Pc methods, and its zone. Advisory only: severity still comes from the CDM's Pc.
+  const e = expandedPc(cdm);
+  const expanded = !e.available
+    ? `Not available (${e.reason})`
+    : e.zone === "green"
+      ? `Green zone: worst of 3 methods is ${odds(e.worst.pc)}, extra analysis not needed`
+      : `${e.zone.toUpperCase()} zone: worst of 3 methods is ${odds(e.worst.pc)} (${e.worst.name}${e.worst.note ? `, ${e.worst.note}` : ""})`;
+
   return [
     { name: "Probability level", result: level },
     { name: "Trend", result: trend },
     { name: "Confidence", result: confidence },
     { name: "Time to act", result: time },
+    { name: "Radial separation", result: radial },
+    { name: "Expanded analysis", result: expanded },
   ];
 }

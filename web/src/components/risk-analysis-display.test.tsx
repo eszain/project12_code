@@ -36,6 +36,8 @@ describe("risk analysis in the event summary card", () => {
       expect(block.getByText("Rising: 1 in 5,528 to 1 in 2,571")).toBeTruthy();
       expect(block.getByText(/62 m miss \/ 117 m uncertainty = 0.5x, so low confidence/)).toBeTruthy();
       expect(block.getByText("15.7 h until closest approach")).toBeTruthy();
+      expect(block.getByText(/radial uncertainty = .*x, so nearly the same altitude/)).toBeTruthy();
+      expect(block.getByText(/^RED zone: worst of 3 methods is 1 in/)).toBeTruthy();
       cleanup();
     }
   });

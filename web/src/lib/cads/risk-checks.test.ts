@@ -1,7 +1,10 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { formatShortOdds, missComponentsM } from "./analyze";
 import { missVsUncertainty } from "./details";
+import { expandedPc } from "./pc-methods";
+import { positionSigmasM } from "./quality";
 import { riskChecks } from "./risk-checks";
 import { Store, latestRevision, severityOf, type CdmEvent } from "./store";
 
@@ -25,8 +28,24 @@ describe("risk analysis checks (issue #9)", () => {
   const checks = riskChecks(test, tca - 15.7 * HOUR);
   const result = (name: string) => checks.find((c) => c.name === name)!.result;
 
-  it("returns the four checks in order", () => {
-    expect(checks.map((c) => c.name)).toEqual(["Probability level", "Trend", "Confidence", "Time to act"]);
+  it("returns the six checks in order", () => {
+    expect(checks.map((c) => c.name)).toEqual(["Probability level", "Trend", "Confidence", "Time to act", "Radial separation", "Expanded analysis"]);
+  });
+
+  it("5. compares the altitude difference with the altitude uncertainty", () => {
+    const cdm = latestRevision(test).cdm;
+    const r = missComponentsM(cdm)!.radial;
+    const sigmaR = Math.hypot(positionSigmasM(cdm.sat1)![0], positionSigmasM(cdm.sat2)![0]);
+    expect(result("Radial separation")).toBe(`${Math.round(r)} m radial / ${Math.round(sigmaR)} m radial uncertainty = ${(r / sigmaR).toFixed(1)}x, so nearly the same altitude`);
+    const noCov = riskChecks({ ...test, revisions: [{ ...latestRevision(test), cdm: { ...cdm, sat2: { ...cdm.sat2, covarianceRtn: null } } }] }, 0);
+    expect(noCov[4].result).toBe("Not available (no relative position or covariance)");
+  });
+
+  it("6. reports the worst case of the three Pc methods and its zone", () => {
+    const e = expandedPc(latestRevision(test).cdm);
+    if (!e.available) throw new Error(e.reason);
+    expect(result("Expanded analysis")).toMatch(/^RED zone: worst of 3 methods is 1 in [\d,]+ \(/);
+    expect(result("Expanded analysis")).toContain(formatShortOdds(e.worst.pc));
   });
 
   it("1. rates the CDM's Pc against the action level", () => {
