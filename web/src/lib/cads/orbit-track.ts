@@ -8,6 +8,9 @@
 //
 // Assumptions: two-body only (no J2, drag, Sun or Moon). Over +/-10 s these change the positions by far less than
 // a metre. Positions are in metres. The output has the same shape as replayTrack() in replay.ts.
+//
+// Errors: a CDM that cannot be propagated (missing state vector, frame not Earth-fixed) returns
+// { available: false, reason }. A bad stepS or time window is a programming mistake and throws a RangeError.
 
 import { MU, OMEGA_EARTH, inertialVelocity, isEarthFixed } from "./frames";
 import { add, dot, norm, scale, sub, type V3 } from "./linalg";
