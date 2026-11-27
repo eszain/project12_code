@@ -20,3 +20,7 @@ var/
 data/samples/space-track/*.json
 data/samples/space-track/*.kvn
 data/samples/space-track/*.txt
+
+# ESA Kelvins collision-avoidance data has no licence. Keep the CSV and the converted sample local.
+data/esa/
+web/public/esa-sample/

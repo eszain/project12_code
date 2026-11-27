@@ -8,6 +8,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { analyzeEvent, type EventAnalysis } from "@/lib/cads/analyze";
 import { loadDemoDocuments, loadScaleDocuments, sortByCreation } from "@/lib/cads/demo";
+import { ESA_LOAD_PACE, ESA_SAMPLE_MISSING, fetchEsaSample, shouldPauseAfter } from "@/lib/cads/esa";
 import { IndexedDbEventPersistence } from "@/lib/cads/event-persistence";
 import {
   CONFIG,
@@ -212,7 +213,8 @@ export function useCadsSession(
 
   const feedDocuments = async (
     docs: Doc[],
-    intro: string
+    intro: string,
+    pace?: { batchSize: number; intervalMs: number; label: string }
   ) => {
     ensureDefaultRule();
 
@@ -235,7 +237,9 @@ export function useCadsSession(
       setNow(Date.now());
 
       setStatus(
-        `Loading CDM ${i + 1} of ${ordered.length}: ${ordered[i].name}`
+        pace
+          ? `${pace.label} ${i + 1} of ${ordered.length}`
+          : `Loading CDM ${i + 1} of ${ordered.length}: ${ordered[i].name}`
       );
 
       const report = store.importDocuments([
@@ -249,7 +253,11 @@ export function useCadsSession(
       records.push(...report.records);
 
       if (i < ordered.length - 1) {
-        if (pauseEach) {
+        if (pace) {
+          if (shouldPauseAfter(i, ordered.length, pace.batchSize) && pace.intervalMs > 0) {
+            await sleep(pace.intervalMs);
+          }
+        } else if (pauseEach) {
           if (stepDelayMs > 0) {
             await sleep(stepDelayMs);
           }
@@ -304,6 +312,18 @@ export function useCadsSession(
       );
     });
   };
+
+  const loadEsaSample = () =>
+    run(async () => {
+      const docs = await fetchEsaSample();
+      if (!docs) return ESA_SAMPLE_MISSING;
+      setAnalysis(null);
+      return feedDocuments(
+        docs,
+        "Dates use one fixed closest approach, so the timeline keeps the real shape. Now run the risk analysis.",
+        ESA_LOAD_PACE
+      );
+    });
 
   const addTestEvents = () =>
     run(async () => {
@@ -453,6 +473,7 @@ export function useCadsSession(
     now,
     loadData,
     loadFiles,
+    loadEsaSample,
     addTestEvents,
     runAnalysis,
     reset,

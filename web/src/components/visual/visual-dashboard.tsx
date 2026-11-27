@@ -47,10 +47,13 @@ import { CalculationDetails } from "@/components/calculation-details";
 import { CalculationsMathView } from "@/components/visual/calculations-math-view";
 import { ConjunctionPlayer } from "@/components/visual/conjunction-player";
 import { ConjunctionGlobe } from "@/components/visual/conjunction-globe";
+import { ManeuverOptions } from "@/components/maneuver-options";
 import { ImportReportSheet } from "@/components/import-report-sheet";
 import { OriginalCdm } from "@/components/original-cdm";
 import { useCadsSession } from "@/components/use-cads-session";
 import { hoursBetween } from "@/lib/cads/time";
+import { UserSwitcher } from "@/components/visual/user-switcher";
+import { MOCK_USERS, visibleEvents } from "@/lib/cads/subscriptions";
 
 import {
   countUnacknowledgedAlerts,
@@ -175,6 +178,7 @@ export function VisualDashboard({
 
   const [selected, setSelected] = useState<number | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState("admin");
 
   const [view, setView] = useState<"operator" | "specialist" | "calculations">(
     "operator"
@@ -190,9 +194,42 @@ export function VisualDashboard({
   const detailsScroll = useRef<HTMLDivElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
-  const event = snap.events.find(
-    (item) => item.id === selected
+  const selectedUser =
+  MOCK_USERS.find((user) => user.id === selectedUserId) ??
+  MOCK_USERS[0];
+
+const subscribedEvents = useMemo(
+  () => visibleEvents(snap.events, selectedUser),
+  [snap.events, selectedUser]
+);
+const visibleEventIds = useMemo(
+  () => new Set(subscribedEvents.map((item) => item.id)),
+  [subscribedEvents]
+);
+
+const event = subscribedEvents.find(
+  (item) => item.id === selected
+);
+
+function handleUserChange(userId: string) {
+  const nextUser = MOCK_USERS.find(
+    (user) => user.id === userId
   );
+
+  if (!nextUser) return;
+
+  const nextVisibleEvents = visibleEvents(
+    snap.events,
+    nextUser
+  );
+
+  setSelectedUserId(userId);
+
+  if (!nextVisibleEvents.some((item) => item.id === selected)) {
+    setSelected(null);
+    setDetailsOpen(false);
+  }
+}
 
   const isPaused = (eventId: number) =>
     isNotificationPaused(
@@ -218,12 +255,16 @@ export function VisualDashboard({
     session.hydrated
   );
 
-  const activeAlerts = snap.alerts.filter(
-    (alert) =>
-      !alert.superseded &&
-      !isPaused(alert.eventId)
-  );
+  const visibleOutboxEntries = outbox.entries.filter(
+  (entry) => visibleEventIds.has(entry.eventId)
+);
 
+  const activeAlerts = snap.alerts.filter(
+  (alert) =>
+    visibleEventIds.has(alert.eventId) &&
+    !alert.superseded &&
+    !isPaused(alert.eventId)
+);
   const unacknowledgedCount =
     countUnacknowledgedAlerts(activeAlerts);
 
@@ -285,7 +326,12 @@ export function VisualDashboard({
         aria-label="Data and events"
       >
         <SidebarContent className="p-3">
-          <SidebarGroup>
+  <UserSwitcher
+  selectedUserId={selectedUserId}
+  onUserChange={handleUserChange}
+/>
+
+  <SidebarGroup>
             <div className="flex items-center justify-between gap-2">
               <SidebarGroupLabel>
                 Data actions
@@ -381,6 +427,18 @@ export function VisualDashboard({
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     type="button"
+                    onClick={() => void session.loadEsaSample()}
+                    disabled={busy}
+                    tooltip="Load ESA sample"
+                  >
+                    <FileText />
+                    <span>Load ESA sample</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    type="button"
                     onClick={() => setRulesOpen(true)}
                     tooltip="Manage alert rules"
                   >
@@ -397,7 +455,7 @@ export function VisualDashboard({
                   >
                     <Send />
                     <span>
-                      Outbox &amp; Delivery ({outbox.entries.length})
+                     Outbox &amp; Delivery ({visibleOutboxEntries.length})
                     </span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -447,25 +505,27 @@ export function VisualDashboard({
               </span>
 
               <span className="text-xs text-white">
-                {snap.events.length}
+                {subscribedEvents.length}
               </span>
             </div>
 
             <SidebarGroupContent>
-              {busy && snap.events.length === 0 ? (
+              {busy && subscribedEvents.length === 0 ? (
                 <p
                   className="cads-sidebar-state"
                   role="status"
                 >
                   Loading events…
                 </p>
-              ) : snap.events.length === 0 ? (
+              ) : subscribedEvents.length === 0 ? (
                 <p className="cads-sidebar-state">
-                  No events loaded.
+                  {snap.events.length === 0
+  ? "No events loaded."
+  : "No events for this user's subscriptions."}
                 </p>
               ) : (
                 <SidebarMenu className="gap-2">
-                  {snap.events.map((item) => (
+                  {subscribedEvents.map((item) => (
                     <EventRow
                       key={item.id}
                       event={item}
@@ -615,6 +675,8 @@ export function VisualDashboard({
                     <>
                       <CdmHistory event={event} />
 
+                      <ManeuverOptions cdm={current} />
+
                       <ExplanationCard
                         event={event}
                         analysis={analysis?.[event.id]}
@@ -645,7 +707,7 @@ export function VisualDashboard({
 
       <NotificationsSheet
         alerts={activeAlerts}
-        events={snap.events}
+        events={subscribedEvents}
         open={notificationsOpen}
         onOpenChange={setNotificationsOpen}
         onSelect={selectEvent}
@@ -674,7 +736,7 @@ export function VisualDashboard({
       <OutboxSheet
         open={outboxOpen}
         onOpenChange={setOutboxOpen}
-        entries={outbox.entries}
+        entries={visibleOutboxEntries}
         deliver={outbox.deliver}
         retry={outbox.retry}
         simulateFailure={outbox.simulateFailure}

@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { cross, dot, norm, scale, sub, unit } from "./linalg";
+import { orbitTrack } from "./orbit-track";
 import { parseDocument, type NormalizedCdm } from "./parser";
 import { CLOSE_UP_TILT, REPLAY_HALF_SPAN_S, closeUpOffset, playbackRate, replayTrack, subPoint, type ReplayTrack } from "./replay";
 
@@ -84,5 +85,18 @@ describe("3D replay positions", () => {
     expect(Math.abs(dot(unit(view), unit(relVel)))).toBeLessThan(1e-6);
     expect(Math.abs(dot(unit(view), unit(miss)))).toBeLessThan(1e-6);
     expect(dot(view, up)).toBeGreaterThanOrEqual(0);
+  });
+
+  it.each(samples)("%s: the orbit track and the straight-line track agree on the gap, while the objects curve with the orbit", (_, cdm) => {
+    const orbit = orbitTrack(cdm);
+    const line = trackOf(cdm);
+    if (!orbit.available) throw new Error(orbit.reason);
+    expect(orbit.samples).toHaveLength(line.samples.length);
+    // Both objects follow the same curve, so the gap changes by only a few metres over the window.
+    for (const [i, s] of orbit.samples.entries()) expect(Math.abs(s.separationM - line.samples[i].separationM)).toBeLessThan(4);
+    expect(Math.abs(orbit.closest.separationM - line.closest.separationM)).toBeLessThan(0.5);
+    // The orbit bends away from the straight line by hundreds of metres after 10 s.
+    const end = orbit.samples.length - 1;
+    expect(norm(sub(orbit.samples[end].primary, line.samples[end].primary))).toBeGreaterThan(100);
   });
 });
