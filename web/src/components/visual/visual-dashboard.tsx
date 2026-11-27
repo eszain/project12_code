@@ -31,6 +31,19 @@ import {
 } from "@/components/animate-ui/components/radix/sidebar";
 
 import { NotificationsSheet } from "@/components/visual/notifications-sheet";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/animate-ui/components/radix/sheet";
+import {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+} from "@/components/animate-ui/components/radix/tabs";
+
 import { OutboxSheet } from "@/components/visual/outbox-sheet";
 import { useOutbox } from "@/components/visual/use-outbox";
 import { RuleEditor } from "@/components/visual/rule-editor";
@@ -41,6 +54,7 @@ import { ExplanationCard } from "@/components/explanation-card";
 import { CalculationDetails } from "@/components/calculation-details";
 import { CalculationsMathView } from "@/components/visual/calculations-math-view";
 import { ConjunctionPlayer } from "@/components/visual/conjunction-player";
+import { ConjunctionGlobe } from "@/components/visual/conjunction-globe";
 import { ImportReportSheet } from "@/components/import-report-sheet";
 import { OriginalCdm } from "@/components/original-cdm";
 import { useCadsSession } from "@/components/use-cads-session";
@@ -170,6 +184,7 @@ export function VisualDashboard({
   } = session;
 
   const [selected, setSelected] = useState<number | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   const [view, setView] = useState<
     "operator" | "specialist" | "calculations"
@@ -242,6 +257,7 @@ export function VisualDashboard({
 
   const selectEvent = (id: number) => {
     setSelected(id);
+    setDetailsOpen(true);
     setView("operator");
   };
 
@@ -254,6 +270,7 @@ export function VisualDashboard({
       outbox.clear();
 
       setSelected(null);
+      setDetailsOpen(false);
       setReportOpen(false);
       setRulesOpen(false);
       setOutboxOpen(false);
@@ -309,7 +326,10 @@ export function VisualDashboard({
                   <SidebarMenuButton
                     type="button"
                     onClick={() =>
-                      session.loadData(() => setSelected(null))
+                      session.loadData(() => {
+                        setSelected(null);
+                        setDetailsOpen(false);
+                      })
                     }
                     disabled={busy}
                     tooltip="Load sample data"
@@ -485,12 +505,16 @@ export function VisualDashboard({
       </Sidebar>
 
       <SidebarInset className="cads-inset">
+        <div className="cads-left-sidebar-trigger">
+          <SidebarTrigger
+            aria-label="Toggle data and events sidebar"
+            title="Toggle data and events sidebar"
+          />
+        </div>
         <SidebarProvider
           className="cads-inner"
-          open={Boolean(event)}
-          onOpenChange={(open) => {
-            if (!open) setSelected(null);
-          }}
+          open={detailsOpen}
+          onOpenChange={setDetailsOpen}
           style={
             {
               "--sidebar-width": "30rem",
@@ -501,7 +525,7 @@ export function VisualDashboard({
             className="cads-centre p-6"
             aria-label="Conjunction player"
           >
-            <div className="mb-4 flex items-center justify-between gap-3">
+            <div className="cads-centre-header mb-4 flex items-center justify-between gap-3">
               <h1 className="text-xl font-semibold">
                 Conjunction player
               </h1>
@@ -513,16 +537,16 @@ export function VisualDashboard({
 
             {!event || !current ? (
               <div className="cads-player-empty">
-                <p>
-                  Choose an event in the left list to play its pass.
-                </p>
+                <div>
+                  <p className="font-medium text-sky-100">Select a conjunction event to inspect its pass.</p>
+                  <p className="mt-2 text-sm">The centre will show collision probability history, miss-distance history, the 2D conjunction replay, and a 3D conjunction visualization.</p>
+                </div>
               </div>
             ) : (
-              <div data-testid="selected-player">
-                <ConjunctionPlayer
-                  key={`${event.id}-${current.messageKey}`}
-                  event={event}
-                />
+              <div data-testid="selected-player" className="cads-centre-stack">
+                <CdmHistory event={event} chartsOnly />
+                <ConjunctionPlayer key={`${event.id}-${current.messageKey}`} event={event} />
+                <ConjunctionGlobe key={`globe-${event.id}-${current.messageKey}`} event={event} />
               </div>
             )}
           </main>
@@ -580,65 +604,13 @@ export function VisualDashboard({
                   className="cads-details-scroll"
                   data-testid="details-scroll"
                 >
-                  <div
-                    className="view-switch"
-                    role="group"
-                    aria-label="Event detail view"
-                  >
-                    <button
-                      type="button"
-                      className="view-option"
-                      aria-pressed={view === "operator"}
-                      onClick={() => setView("operator")}
-                      onKeyDown={(keyboardEvent) => {
-                        if (
-                          keyboardEvent.key === "Enter" ||
-                          keyboardEvent.key === " "
-                        ) {
-                          keyboardEvent.preventDefault();
-                          setView("operator");
-                        }
-                      }}
-                    >
-                      Operator
-                    </button>
-
-                    <button
-                      type="button"
-                      className="view-option"
-                      aria-pressed={view === "specialist"}
-                      onClick={() => setView("specialist")}
-                      onKeyDown={(keyboardEvent) => {
-                        if (
-                          keyboardEvent.key === "Enter" ||
-                          keyboardEvent.key === " "
-                        ) {
-                          keyboardEvent.preventDefault();
-                          setView("specialist");
-                        }
-                      }}
-                    >
-                      Specialist
-                    </button>
-
-                    <button
-                      type="button"
-                      className="view-option"
-                      aria-pressed={view === "calculations"}
-                      onClick={() => setView("calculations")}
-                      onKeyDown={(keyboardEvent) => {
-                        if (
-                          keyboardEvent.key === "Enter" ||
-                          keyboardEvent.key === " "
-                        ) {
-                          keyboardEvent.preventDefault();
-                          setView("calculations");
-                        }
-                      }}
-                    >
-                      Calculations
-                    </button>
-                  </div>
+                  <Tabs value={view} onValueChange={(value) => setView(value as typeof view)} className="view-tabs">
+                    <TabsList aria-label="Event detail view" className="w-full">
+                      <TabsTrigger value="operator" aria-pressed={view === "operator"}>Operator</TabsTrigger>
+                      <TabsTrigger value="specialist" aria-pressed={view === "specialist"}>Specialist</TabsTrigger>
+                      <TabsTrigger value="calculations" aria-pressed={view === "calculations"}>Calculations</TabsTrigger>
+                    </TabsList>
+                  </Tabs>
 
                   <EventSummaryCard
                     event={event}

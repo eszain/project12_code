@@ -256,7 +256,7 @@ it("keeps the same event groups when CDMs arrive in any order", () => {
 
     expect(groups).toEqual(expected);
   }
-});
+}, 30_000); // 720 arrival orders through the full store: allow for a busy test run
 
   const docs = (folder: string, label = folder) => readdirSync(join(DATA, folder)).map((f) => ({ name: f, content: read(folder, f), label }));
   const rule = { name: "Pc >= 1e-4", pcMin: 1e-4, missDistanceMaxM: null, hoursToTcaMax: null, objectIds: [] };
@@ -527,13 +527,47 @@ it("reports Pc, miss distance and TCA changes in chronological order", () => {
     expect(pts.map((p) => p.n)).toEqual([1, 2, 3, 4]);
     expect(pts.map((p) => p.createdMs)).toEqual([...pts.map((p) => p.createdMs)].sort((a, b) => a - b));
     expect(pts.map((p) => p.pc)).toEqual([7.85469e-7, 2.885737e-8, 7.665263e-9, 0]); // Appendix A values, in creation order
-    expect(pts.every((p) => p.hoursToTca > 0)).toBe(true);
+    expect(pts.every((p) => p.hoursToTca !== null && p.hoursToTca > 0)).toBe(true);
   });
   it("classifies the change in Pc, including missing values", () => {
     expect(pcChange(1e-6, 1e-7)).toBe("lower");
     expect(pcChange(1e-7, 1e-6)).toBe("higher");
     expect(pcChange(0, 0)).toBe("same");
     expect(pcChange(null, 1e-7)).toBe("n/a");
+  });
+  it("uses each revision's own TCA and preserves numeric, chronological spacing", () => {
+    const base = cdm("reconstructed", "cdm_set_1.json");
+    const event = {
+      id: 99,
+      key: "synthetic",
+      pairKey: "synthetic",
+      revisions: [
+        { id: 2, cdm: { ...base, creationDate: Date.UTC(2026, 0, 1, 6), tca: Date.UTC(2026, 0, 2, 6) }, sourceFile: "new", sourceLabel: "", correlationNote: "" },
+        { id: 1, cdm: { ...base, creationDate: Date.UTC(2026, 0, 1), tca: Date.UTC(2026, 0, 2) }, sourceFile: "old", sourceLabel: "", correlationNote: "" },
+      ],
+    };
+    const points = trendPoints(event);
+    expect(points.map((p) => p.file)).toEqual(["old", "new"]);
+    expect(points.map((p) => p.hoursToTca)).toEqual([24, 24]);
+
+    const changedTca = trendPoints({
+      ...event,
+      revisions: event.revisions.map((revision, index) => index === 0
+        ? { ...revision, cdm: { ...revision.cdm, tca: revision.cdm.tca + 2 * 3600000 } }
+        : revision),
+    });
+    expect(changedTca.map((p) => p.hoursToTca)).toEqual([24, 26]);
+  });
+  it("does not invent values for invalid timestamps or scientific fields", () => {
+    const base = cdm("reconstructed", "cdm_set_1.json");
+    const points = trendPoints({ id: 1, key: "x", pairKey: "x", revisions: [{
+      id: 1,
+      cdm: { ...base, creationDate: Number.NaN, tca: Number.NaN, pc: Number.NaN, missDistanceM: Number.NaN },
+      sourceFile: "invalid",
+      sourceLabel: "",
+      correlationNote: "",
+    }] });
+    expect(points[0]).toMatchObject({ hoursToTca: null, pc: null, missM: null });
   });
   it("puts non-zero Pc on a log axis and a source zero on the floor line", () => {
     const axis = pcAxis(trendPoints(history()))!;

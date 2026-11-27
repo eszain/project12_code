@@ -1,45 +1,76 @@
 "use client";
 
 import { formatShortOdds } from "@/lib/cads/analyze";
-import type { CdmEvent } from "@/lib/cads/store";
+import { CONFIG, type CdmEvent } from "@/lib/cads/store";
 import { isoZ } from "@/lib/cads/time";
 import { pcAxis, pcChange, pcFraction, trendPoints, type Change, type TrendPoint } from "@/lib/cads/trend";
 
-const W = 360;
-const H = 150;
-const PAD = { l: 48, r: 12, t: 10, b: 24 };
-const px = (i: number, n: number) => (n === 1 ? (PAD.l + W - PAD.r) / 2 : PAD.l + (i * (W - PAD.l - PAD.r)) / (n - 1));
+const W = 560;
+const H = 230;
+// Reserve room for the vertical axis title/ticks and the horizontal title/ticks.
+const PAD = { l: 116, r: 20, t: 18, b: 52 };
+const px = (hours: number | null, points: TrendPoint[]) => {
+  const values = points.map((p) => p.hoursToTca).filter((v): v is number => v !== null);
+  if (hours === null || values.length < 2) return (PAD.l + W - PAD.r) / 2;
+  const max = Math.max(...values);
+  const min = Math.min(...values);
+  if (max === min) return (PAD.l + W - PAD.r) / 2;
+  // Oldest revision (largest hours before TCA) is on the left; newest is on the right.
+  return PAD.l + ((max - hours) / (max - min)) * (W - PAD.l - PAD.r);
+};
 const py = (frac: number) => PAD.t + (1 - frac) * (H - PAD.t - PAD.b);
 
 const CHANGE_LABEL: Record<Change, string> = { higher: "▲ higher", lower: "▼ lower", same: "= same", "n/a": "–" };
 
-function Frame({ points, yTicks }: { points: TrendPoint[]; yTicks: { frac: number; label: string }[] }) {
+function Frame({ points, yTicks, yAxisTitle }: { points: TrendPoint[]; yTicks: { frac: number; label: string }[]; yAxisTitle: string }) {
   return (
     <>
       {yTicks.map((t) => (
         <g key={t.label}>
           <line x1={PAD.l} x2={W - PAD.r} y1={py(t.frac)} y2={py(t.frac)} className="chart-grid" strokeDasharray="3 3" />
-          <text x={PAD.l - 6} y={py(t.frac) + 3} textAnchor="end" className="chart-label">{t.label}</text>
+        <text x={PAD.l - 12} y={py(t.frac) + 4} textAnchor="end" className="chart-label">{t.label}</text>
         </g>
       ))}
-      {points.map((p, i) => (
-        <text key={p.n} x={px(i, points.length)} y={H - 8} textAnchor="middle" className="chart-label">#{p.n}</text>
+      {points.map((p) => p.hoursToTca === null ? null : (
+        <text key={p.n} x={px(p.hoursToTca, points)} y={H - 30} textAnchor="middle" className="chart-label">{p.hoursToTca.toFixed(1)}</text>
       ))}
+      <text x={(PAD.l + W - PAD.r) / 2} y={H - 7} textAnchor="middle" className="chart-axis-title">Hours before TCA</text>
+      <g transform={`translate(26 ${(PAD.t + H - PAD.b) / 2}) rotate(-90)`}>
+        <text x="0" y="0" textAnchor="middle" className="chart-axis-title">{yAxisTitle}</text>
+      </g>
     </>
   );
 }
 
 function PcChart({ points }: { points: TrendPoint[] }) {
-  const axis = pcAxis(points);
-  if (!axis) return <p className="panel-note">No non-zero Pc values to chart.</p>;
+  const sourceAxis = pcAxis(points);
+  if (!sourceAxis) {
+    const summary = points.map((p) => `CDM ${p.n}: ${p.pc === 0 ? "exactly 0" : "not provided"}`).join("; ");
+    return <p className="panel-note" role="img" aria-label={`Pc history. ${summary}`}>All available source Pc values are exactly 0; no non-zero values are present for a logarithmic scale.</p>;
+  }
+  const axis = {
+    ...sourceAxis,
+    floorExp: Math.min(sourceAxis.floorExp, Math.floor(Math.log10(CONFIG.pcWatch)) - 1),
+    maxExp: Math.max(sourceAxis.maxExp, Math.ceil(Math.log10(CONFIG.pcAction))),
+  };
   const ticks = [{ frac: 0, label: "0" }];
   for (let e = axis.minExp; e <= axis.maxExp; e++) ticks.push({ frac: pcFraction(10 ** e, axis), label: `1e${e}` });
-  const pts = points.map((p, i) => ({ x: px(i, points.length), y: py(pcFraction(p.pc, axis)), zero: p.pc === 0, p }));
+  const pts = points.filter((p) => p.hoursToTca !== null).map((p) => ({ x: px(p.hoursToTca, points), y: py(pcFraction(p.pc, axis)), zero: p.pc === 0, p }));
+  const thresholdLines = [
+    { value: CONFIG.pcWatch, label: "watch" },
+    { value: CONFIG.pcAction, label: "action" },
+  ];
   const known = pts.filter((q) => q.p.pc !== null);
   const summary = points.map((p) => `CDM ${p.n}: ${p.pc === null ? "not provided" : formatShortOdds(p.pc)}`).join("; ");
   return (
     <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Pc trend across CDMs. ${summary}`} className="chart">
-      <Frame points={points} yTicks={ticks} />
+      <Frame points={points} yTicks={ticks} yAxisTitle="Probability of collision (Pc)" />
+      {thresholdLines.map(({ value, label }) => (
+        <g key={label}>
+          <line x1={PAD.l} x2={W - PAD.r} y1={py(pcFraction(value, axis))} y2={py(pcFraction(value, axis))} className="chart-threshold" strokeDasharray="5 3" />
+          <text x={W - PAD.r} y={py(pcFraction(value, axis)) - 3} textAnchor="end" className="chart-threshold-label">{label}</text>
+        </g>
+      ))}
       <polyline points={known.map((q) => `${q.x},${q.y}`).join(" ")} className="chart-line" />
       {known.map((q) => (
         <circle key={q.p.n} cx={q.x} cy={q.y} r={3.5} className={q.zero ? "chart-dot is-zero" : "chart-dot"}>
@@ -51,17 +82,18 @@ function PcChart({ points }: { points: TrendPoint[] }) {
 }
 
 function MissChart({ points }: { points: TrendPoint[] }) {
-  const max = Math.max(...points.map((p) => p.missM), 1) * 1.1;
-  const pts = points.map((p, i) => ({ x: px(i, points.length), y: py(p.missM / max), p }));
+  const valid = points.filter((p) => p.hoursToTca !== null && p.missM !== null);
+  const max = Math.max(...valid.map((p) => p.missM ?? 0), 1) * 1.1;
+  const pts = valid.map((p) => ({ x: px(p.hoursToTca, points), y: py((p.missM ?? 0) / max), p }));
   const ticks = [0, 0.5, 1].map((f) => ({ frac: f, label: `${Math.round((f * max) / 10) * 10} m` }));
-  const summary = points.map((p) => `CDM ${p.n}: ${Math.round(p.missM)} m`).join("; ");
+  const summary = points.map((p) => `CDM ${p.n}: ${p.missM === null ? "not provided" : `${Math.round(p.missM)} m`}`).join("; ");
   return (
     <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Miss distance trend across CDMs. ${summary}`} className="chart">
-      <Frame points={points} yTicks={ticks} />
+      <Frame points={points} yTicks={ticks} yAxisTitle="Miss distance (m)" />
       <polyline points={pts.map((q) => `${q.x},${q.y}`).join(" ")} className="chart-line" />
       {pts.map((q) => (
         <circle key={q.p.n} cx={q.x} cy={q.y} r={3.5} className="chart-dot">
-          <title>{`CDM ${q.p.n}: miss distance ${Math.round(q.p.missM)} m`}</title>
+          <title>{`CDM ${q.p.n}: miss distance ${Math.round(q.p.missM ?? 0)} m`}</title>
         </circle>
       ))}
     </svg>
@@ -69,7 +101,7 @@ function MissChart({ points }: { points: TrendPoint[] }) {
 }
 
 /** B1: every CDM of the selected event in time order. B2: how Pc and miss distance changed across them. */
-export function CdmHistory({ event }: { event: CdmEvent }) {
+export function CdmHistory({ event, chartsOnly = false }: { event: CdmEvent; chartsOnly?: boolean }) {
   const points = trendPoints(event);
   return (
     <section className="detail-panel ops-panel" aria-labelledby="cdm-history-heading">
@@ -80,7 +112,7 @@ export function CdmHistory({ event }: { event: CdmEvent }) {
         </div>
         <span className="panel-count">Source values, not recalculated</span>
       </div>
-      <div className="dashboard-table-wrap">
+      {!chartsOnly && <div className="dashboard-table-wrap">
         <table className="dashboard-table ops-history-table" aria-label="CDM history">
           <thead>
             <tr>
@@ -94,32 +126,32 @@ export function CdmHistory({ event }: { event: CdmEvent }) {
               return (
                 <tr key={p.n}>
                   <th scope="row">{p.n}</th>
-                  <td>{isoZ(p.createdMs)}</td>
-                  <td>{p.hoursToTca.toFixed(1)} h</td>
+                  <td>{Number.isFinite(p.createdMs) ? isoZ(p.createdMs) : "unavailable"}</td>
+                  <td>{p.hoursToTca === null ? "unavailable" : `${p.hoursToTca.toFixed(1)} h`}</td>
                   <td>
                     <div>{p.pc === null ? "not provided" : formatShortOdds(p.pc)}</div>
                     <code className="table-subline">{p.pcRaw ?? ""}</code>
                   </td>
                   <td className={`change-${change}`}>{i === 0 ? "–" : CHANGE_LABEL[change]}</td>
-                  <td>{p.missM.toFixed(0)}</td>
+                  <td>{p.missM === null ? "unavailable" : p.missM.toFixed(0)}</td>
                   <td className="ops-file">{p.file}</td>
                 </tr>
               );
             })}
           </tbody>
         </table>
-      </div>
+      </div>}
       <div className="ops-charts">
         <figure>
-          <figcaption>Collision chance (Pc), log scale; a hollow dot on the bottom line means Pc is exactly 0</figcaption>
+          <figcaption>Probability of collision (Pc), log scale; watch {CONFIG.pcWatch.toExponential(0)}, action {CONFIG.pcAction.toExponential(0)}. Hollow dots are source Pc = 0.</figcaption>
           <PcChart points={points} />
         </figure>
         <figure>
-          <figcaption>Miss distance</figcaption>
+          <figcaption>Miss distance (metres)</figcaption>
           <MissChart points={points} />
         </figure>
       </div>
-      <p className="panel-note ops-foot">CDMs are spaced equally; times are in the table.</p>
+      <p className="panel-note ops-foot">Each revision uses its own source creation time and TCA; revisions are ordered oldest first and plotted at their actual hours before TCA. Invalid timestamps are shown as unavailable and omitted from the plot.</p>
     </section>
   );
 }

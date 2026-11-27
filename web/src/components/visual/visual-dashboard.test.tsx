@@ -98,6 +98,111 @@ it("renders the left sidebar, the player and the event details sidebar", async (
   ).toBeTruthy();
 });
 
+it("exposes distinct controls for the data and event-details sidebars", async () => {
+  await renderReady();
+  const dataToggle = screen.getByRole("button", { name: "Toggle data and events sidebar" });
+  expect(dataToggle).toBeTruthy();
+  expect(dataToggle.getAttribute("title")).toBe("Toggle data and events sidebar");
+  expect(screen.getByRole("button", { name: "Toggle event details" })).toBeTruthy();
+  expect(dataToggle.closest(".cads-left-sidebar-trigger")).toBeTruthy();
+});
+
+it("uses the left provider for the desktop data-sidebar toggle", async () => {
+  const user = userEvent.setup();
+  await renderReady();
+  const dataToggle = screen.getByRole("button", { name: "Toggle data and events sidebar" });
+  const dataSidebar = screen.getByLabelText("Data and events");
+  const sidebarGroup = dataSidebar.closest("[data-collapsible]");
+  expect(sidebarGroup?.getAttribute("data-collapsible")).not.toBe("icon");
+  await user.click(dataToggle);
+  expect(sidebarGroup?.getAttribute("data-collapsible")).toBe("icon");
+  await user.click(dataToggle);
+  expect(sidebarGroup?.getAttribute("data-collapsible")).not.toBe("icon");
+});
+
+it("reopens the right event-details sidebar without clearing the selected event", async () => {
+  const user = userEvent.setup();
+  await renderReady();
+  await user.click(screen.getByRole("button", { name: /Load sample data/ }));
+  const [row] = await screen.findAllByRole("button", { name: /Select .*Severity/ });
+  await user.click(row);
+
+  const rightSidebar = screen.getByLabelText("Event details").closest("[data-side=right]");
+  const detailsToggle = screen.getByRole("button", { name: "Toggle event details" });
+  expect(rightSidebar?.getAttribute("data-state")).toBe("expanded");
+  expect(screen.getByTestId("selected-player")).toBeTruthy();
+
+  await user.click(detailsToggle);
+  expect(rightSidebar?.getAttribute("data-state")).toBe("collapsed");
+  expect(screen.getByTestId("selected-player")).toBeTruthy();
+
+  await user.click(detailsToggle);
+  expect(rightSidebar?.getAttribute("data-state")).toBe("expanded");
+  expect(screen.getByText("Selected event")).toBeTruthy();
+
+  await user.click(detailsToggle);
+  expect(rightSidebar?.getAttribute("data-state")).toBe("collapsed");
+  await user.click(detailsToggle);
+  expect(rightSidebar?.getAttribute("data-state")).toBe("expanded");
+  expect(screen.getByTestId("selected-player")).toBeTruthy();
+});
+
+it("opens and reopens empty right details without a selected event, including after reset", async () => {
+  const user = userEvent.setup();
+  await renderReady();
+  const rightSidebar = screen.getByLabelText("Event details").closest("[data-side=right]");
+  const detailsToggle = screen.getByRole("button", { name: "Toggle event details" });
+
+  expect(rightSidebar?.getAttribute("data-state")).toBe("collapsed");
+  await user.click(detailsToggle);
+  expect(rightSidebar?.getAttribute("data-state")).toBe("expanded");
+  expect(screen.getByText("Choose an event to view its details.")).toBeTruthy();
+  await user.click(detailsToggle);
+  expect(rightSidebar?.getAttribute("data-state")).toBe("collapsed");
+  await user.click(detailsToggle);
+  expect(rightSidebar?.getAttribute("data-state")).toBe("expanded");
+
+  await user.click(screen.getByRole("button", { name: /Load sample data/ }));
+  const [row] = await screen.findAllByRole("button", { name: /Select .*Severity/ });
+  await user.click(row);
+  await user.click(screen.getAllByRole("button", { name: "Reset" })[0]);
+  await waitFor(() => expect(screen.getByText("Choose an event to view its details.")).toBeTruthy());
+  expect(rightSidebar?.getAttribute("data-state")).toBe("collapsed");
+  await user.click(detailsToggle);
+  expect(rightSidebar?.getAttribute("data-state")).toBe("expanded");
+  expect(screen.getByText("Choose an event to view its details.")).toBeTruthy();
+});
+
+it("puts both history charts before the 2D and 3D players in the centre", async () => {
+  const user = userEvent.setup();
+  await renderReady();
+  await user.click(screen.getByRole("button", { name: /Load sample data/ }));
+  const [row] = await screen.findAllByRole("button", { name: /Select .*Severity/ });
+  await user.click(row);
+  const centre = screen.getByRole("main", { name: "Conjunction player" });
+  const order = [
+    centre.querySelector('svg[aria-label^="Pc trend"]'),
+    centre.querySelector('svg[aria-label^="Miss distance trend"]'),
+    centre.querySelector(".player"),
+    centre.querySelector(".globe"),
+  ];
+  expect(order.every(Boolean)).toBe(true);
+  const elements = Array.from(centre.querySelectorAll("*"));
+  const indices = order.map((node) => elements.indexOf(node!));
+  expect(indices[0]).toBeLessThan(indices[1]);
+  expect(indices[1]).toBeLessThan(indices[2]);
+  expect(indices[2]).toBeLessThan(indices[3]);
+  expect(screen.getAllByText("Hours before TCA").length).toBeGreaterThan(0);
+  expect(screen.getAllByText("Probability of collision (Pc)").length).toBeGreaterThan(0);
+  expect(screen.getAllByText("Miss distance (m)").length).toBeGreaterThan(0);
+  expect(screen.getAllByText(/watch 1e-7, action 1e-4/i).length).toBeGreaterThan(0);
+});
+
+it("shows the empty-state explanation before event selection", async () => {
+  await renderReady();
+  expect(screen.getByText(/collision probability history, miss-distance history, the 2D conjunction replay, and a 3D conjunction visualization/i)).toBeTruthy();
+});
+
 it("loads the sample events, selects a row, and switches the detail view", async () => {
   const user = userEvent.setup();
   await renderReady();
@@ -109,18 +214,18 @@ it("loads the sample events, selects a row, and switches the detail view", async
   await user.click(rows[0]);
   expect(screen.getByTestId("selected-player")).toBeTruthy();
   expect(screen.getByText("Selected event")).toBeTruthy();
-  expect(screen.getByRole("button", { name: "Operator" }).getAttribute("aria-pressed")).toBe("true");
+  expect(screen.getByRole("tab", { name: "Operator" }).getAttribute("aria-pressed")).toBe("true");
   const selectedPlayerTitle = screen.getByTestId("selected-player").querySelector("h2")?.textContent;
   await user.click(screen.getByRole("button", { name: /Open full details/ }));
-  expect(screen.getByRole("button", { name: "Specialist" }).getAttribute("aria-pressed")).toBe("true");
+  expect(screen.getByRole("tab", { name: "Specialist" }).getAttribute("aria-pressed")).toBe("true");
   expect(screen.getByTestId("selected-player").querySelector("h2")?.textContent).toBe(selectedPlayerTitle);
 
-  expect(screen.getByText(/REVISION HISTORY/)).toBeTruthy();
+  expect(screen.getAllByText(/REVISION HISTORY/).length).toBeGreaterThan(0);
   expect(screen.getByTestId("details-scroll")).toBeTruthy();
   expect(screen.getByRole("table", { name: "CDM history" })).toBeTruthy();
   expect(screen.getByText(/Position uncertainty, 1σ/)).toBeTruthy();
   expect(screen.getByText("How this was calculated")).toBeTruthy();
-  expect(screen.getByRole("button", { name: "Specialist" }).getAttribute("aria-pressed")).toBe("true");
+  expect(screen.getByRole("tab", { name: "Specialist" }).getAttribute("aria-pressed")).toBe("true");
 });
 
 it("supports keyboard event selection and detail-view switching", async () => {
@@ -144,12 +249,12 @@ it("supports keyboard event selection and detail-view switching", async () => {
   const selectedHeading = screen.getByText("Selected event").parentElement?.querySelector("h2");
   await waitFor(() => expect(document.activeElement).toBe(selectedHeading));
 
-  const specialist = screen.getByRole("button", { name: "Specialist" });
+  const specialist = screen.getByRole("tab", { name: "Specialist" });
   specialist.focus();
   fireEvent.keyDown(specialist, { key: " ", code: "Space" });
   await waitFor(() => expect(specialist.getAttribute("aria-pressed")).toBe("true"));
 
-  const operator = screen.getByRole("button", { name: "Operator" });
+  const operator = screen.getByRole("tab", { name: "Operator" });
   operator.focus();
   fireEvent.keyDown(operator, { key: "Enter", code: "Enter" });
   await waitFor(() => expect(operator.getAttribute("aria-pressed")).toBe("true"));
@@ -187,7 +292,7 @@ it("shows the stored CDM fields unchanged in the specialist view", async () => {
   await user.upload(screen.getByLabelText("Choose CDM files (JSON or KVN)"), upload("mine.json", "public/fixtures/synthetic/synthetic_high_risk_3.json"));
   const [row] = await screen.findAllByRole("button", { name: /Select .*Severity/ });
   await user.click(row);
-  await user.click(screen.getByRole("button", { name: "Specialist" }));
+  await user.click(screen.getByRole("tab", { name: "Specialist" }));
   await user.click(screen.getByRole("button", { name: "View original CDM" }));
   const raw = screen.getByLabelText("Original CDM fields").textContent ?? "";
   expect(raw).toContain("COLLISION_PROBABILITY");
@@ -201,7 +306,7 @@ it("switches to calculations tab and shows LaTeX mathematical formulations", asy
   const [row] = await screen.findAllByRole("button", { name: /Select .*Severity/ });
   await user.click(row);
 
-  const calcButton = screen.getByRole("button", { name: "Calculations" });
+  const calcButton = screen.getByRole("tab", { name: "Calculations" });
   expect(calcButton).toBeTruthy();
   expect(calcButton.getAttribute("aria-pressed")).toBe("false");
 
@@ -211,4 +316,9 @@ it("switches to calculations tab and shows LaTeX mathematical formulations", asy
   expect(screen.getByText("Mathematical Calculations & Formulations")).toBeTruthy();
   expect(screen.getByText(/1\. Encounter Geometry & Relative Motion/)).toBeTruthy();
   expect(screen.getByText(/4\. 2D Probability of Collision/)).toBeTruthy();
+  const calculations = screen.getByTestId("calculations-math-view");
+  expect(calculations.classList.contains("math-standalone-panel")).toBe(true);
+  expect(calculations.querySelector(".math-latex-block .katex-display")).toBeTruthy();
+  expect(calculations.querySelector(".dashboard-table-wrap")).toBeTruthy();
+  expect(calculations.querySelector(".math-latex-matrix")).toBeTruthy();
 });
