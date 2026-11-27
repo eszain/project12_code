@@ -53,7 +53,7 @@ describe("maneuver option space", () => {
   it("is not generated for events below the action level, and the level can be changed", () => {
     const gated = maneuverOptionSpace(clear);
     expect(gated.available).toBe(false);
-    expect(!gated.available && gated.reason).toMatch(/Below the maneuver-study level \(1 in 10k\)/);
+    expect(!gated.available && gated.reason).toMatch(/Pc below the 1 in 10k maneuver-study threshold/);
     // With the level set to 0 it runs, and finds no burn is needed for a Pc of 0.
     const forced = maneuverOptionSpace(clear, { minPc: 0 });
     if (!forced.available) throw new Error(forced.reason);
