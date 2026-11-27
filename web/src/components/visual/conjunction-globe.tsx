@@ -9,7 +9,8 @@ import { Crosshair, Globe, Pause, Play, RotateCcw } from "lucide-react";
 import type { Entity, JulianDate as JulianDateT, Viewer } from "cesium";
 
 import { Button } from "@/components/animate-ui/components/buttons/button";
-import { REPLAY_HALF_SPAN_S, closeUpOffset, playbackRate, replayTrack, subPoint, type ReplayTrack } from "@/lib/cads/replay";
+import { orbitTrack } from "@/lib/cads/orbit-track";
+import { REPLAY_HALF_SPAN_S, closeUpOffset, playbackRate, subPoint, type ReplayTrack } from "@/lib/cads/replay";
 import { latestRevision, type CdmEvent } from "@/lib/cads/store";
 import type { V3 } from "@/lib/cads/linalg";
 import { loadCesium } from "@/lib/cesium-loader";
@@ -98,7 +99,7 @@ export function ConjunctionGlobe({ event }: { event: CdmEvent }) {
   const cdm = latestRevision(event).cdm;
   const primaryName = cdm.sat1.name ?? cdm.sat1.designator;
   const secondaryName = cdm.sat2.name ?? cdm.sat2.designator;
-  const track = useMemo(() => replayTrack(cdm), [cdm]);
+  const track = useMemo(() => orbitTrack(cdm), [cdm]);
   const headingId = useId();
 
   const stage = useRef<HTMLDivElement>(null);
@@ -286,7 +287,7 @@ export function ConjunctionGlobe({ event }: { event: CdmEvent }) {
         {seconds(readout.t)} from the closest approach · {Number.isFinite(readout.gapM) ? metres(readout.gapM) : "?"} apart · {rateText(readout.rate)}
       </p>
       <p className="player-note">
-        The replay speeds up while the objects are far apart and slows to 1/100 of real speed as they pass: at {metres(track.closest.separationM)} the real pass takes a few thousandths of a second. Positions use straight-line motion from the CDM for now.
+        The replay speeds up while the objects are far apart and slows to 1/100 of real speed as they pass: at {metres(track.closest.separationM)} the real pass takes a few thousandths of a second. Positions follow each object&apos;s orbit from the CDM (two-body gravity only).
       </p>
     </section>
   );

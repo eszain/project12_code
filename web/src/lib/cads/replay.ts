@@ -1,8 +1,8 @@
 // Positions for the 3D replay (issue #26): both objects from 10 s before the closest approach (TCA) to 10 s after,
 // as Earth-fixed (ITRF) positions in metres, which is the frame CesiumJS draws in.
-// shortcut: straight-line motion from each object's CDM state vector at TCA. Over ±10 s the absolute positions drift a
-// few hundred metres from the true orbit, but both objects drift alike, so the gap between them stays right.
-// Switch to orbitTrack() from issue #27 (two-body propagation) when it lands.
+// The 3D view draws the positions from orbitTrack() (orbit-track.ts, two-body propagation). replayTrack() below is the
+// straight-line version it replaced: over ±10 s its absolute positions drift a few hundred metres from the orbit, but
+// both objects drift alike, so the gap stays right. It is kept as the reference the orbit track is checked against.
 
 import { isEarthFixed } from "./frames";
 import { add, cross, dot, norm, scale, sub, unit, type V3 } from "./linalg";
