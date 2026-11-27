@@ -38,6 +38,7 @@ describe("risk analysis in the event summary card", () => {
       expect(block.getByText("15.7 h until closest approach")).toBeTruthy();
       expect(block.getByText(/radial uncertainty = .*x, so nearly the same altitude/)).toBeTruthy();
       expect(block.getByText(/^RED zone: worst of 3 methods is 1 in/)).toBeTruthy();
+      expect(block.getByText(/^Study only: to reach 1 in 10k, .* half an orbit/)).toBeTruthy();
       cleanup();
     }
   });

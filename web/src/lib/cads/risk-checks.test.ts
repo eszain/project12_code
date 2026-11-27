@@ -28,8 +28,14 @@ describe("risk analysis checks (issue #9)", () => {
   const checks = riskChecks(test, tca - 15.7 * HOUR);
   const result = (name: string) => checks.find((c) => c.name === name)!.result;
 
-  it("returns the six checks in order", () => {
-    expect(checks.map((c) => c.name)).toEqual(["Probability level", "Trend", "Confidence", "Time to act", "Radial separation", "Expanded analysis"]);
+  it("returns the seven checks in order", () => {
+    expect(checks.map((c) => c.name)).toEqual(["Probability level", "Trend", "Confidence", "Time to act", "Radial separation", "Expanded analysis", "Maneuver options"]);
+  });
+
+  it("7. gives the maneuver options only for events at the action level", () => {
+    expect(result("Maneuver options")).toMatch(/^Study only: to reach 1 in 10k, [\d.]+ cm\/s half an orbit \(0\.8 h\) before TCA, or [\d.]+ cm\/s 48 h before$/);
+    const [clear] = load([["reconstructed", "cdm_set_6.json"]]);
+    expect(riskChecks(clear, 0)[6].result).toBe("Not generated: Below the maneuver-study level (1 in 10k): no maneuver options computed.");
   });
 
   it("5. compares the altitude difference with the altitude uncertainty", () => {
