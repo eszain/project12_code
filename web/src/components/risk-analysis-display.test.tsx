@@ -3,10 +3,13 @@
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { analyzeEvent } from "@/lib/cads/analyze";
 import { Store, latestRevision } from "@/lib/cads/store";
 import { EventSummaryCard } from "./event-summary-card";
+
+// Working out maneuver options takes seconds, longer on a busy machine.
+vi.setConfig({ testTimeout: 30_000 });
 
 const DATA = join(__dirname, "../../../data/fixtures");
 const HOUR = 3600000;
@@ -36,6 +39,9 @@ describe("risk analysis in the event summary card", () => {
       expect(block.getByText("Rising: 1 in 5,528 to 1 in 2,571")).toBeTruthy();
       expect(block.getByText(/62 m miss \/ 117 m uncertainty = 0.5x, so low confidence/)).toBeTruthy();
       expect(block.getByText("15.7 h until closest approach")).toBeTruthy();
+      expect(block.getByText(/radial uncertainty = .*x, so nearly the same altitude/)).toBeTruthy();
+      expect(block.getByText(/^RED zone: worst of 3 methods is 1 in/)).toBeTruthy();
+      expect(block.getByText(/^Study only: to reach 1 in 10k, .* half an orbit/)).toBeTruthy();
       cleanup();
     }
   });
