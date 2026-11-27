@@ -19,6 +19,30 @@ const px = (hours: number | null, points: TrendPoint[]) => {
   return PAD.l + ((max - hours) / (max - min)) * (W - PAD.l - PAD.r);
 };
 const py = (frac: number) => PAD.t + (1 - frac) * (H - PAD.t - PAD.b);
+const PLOT_W = W - PAD.l - PAD.r;
+// One "164" label needs about this much horizontal room, in chart units.
+const MIN_LABEL_GAP = 64;
+
+function formatHour(hours: number, span: number): string {
+  if (span >= 48) return String(Math.round(hours));
+  if (span >= 8) return hours.toFixed(1);
+  return hours.toFixed(2);
+}
+
+/** A few evenly spaced times across the plot, including both ends, so the labels do not collide. */
+function xAxisTicks(points: TrendPoint[]): { hours: number; label: string }[] {
+  const values = points.map((p) => p.hoursToTca).filter((v): v is number => v !== null);
+  if (!values.length) return [];
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = max - min;
+  if (span < 1e-6) return [{ hours: min, label: formatHour(min, 0) }];
+  const count = Math.max(2, Math.min(values.length, Math.floor(PLOT_W / MIN_LABEL_GAP) + 1));
+  return Array.from({ length: count }, (_, i) => {
+    const hours = min + (span * i) / (count - 1);
+    return { hours, label: formatHour(hours, span) };
+  });
+}
 
 const CHANGE_LABEL: Record<Change, string> = { higher: "▲ higher", lower: "▼ lower", same: "= same", "n/a": "–" };
 
@@ -31,8 +55,11 @@ function Frame({ points, yTicks, yAxisTitle }: { points: TrendPoint[]; yTicks: {
         <text x={PAD.l - 12} y={py(t.frac) + 4} textAnchor="end" className="chart-label">{t.label}</text>
         </g>
       ))}
-      {points.map((p) => p.hoursToTca === null ? null : (
-        <text key={p.n} x={px(p.hoursToTca, points)} y={H - 30} textAnchor="middle" className="chart-label">{p.hoursToTca.toFixed(1)}</text>
+      {xAxisTicks(points).map((tick) => (
+        <g key={tick.hours}>
+          <line x1={px(tick.hours, points)} x2={px(tick.hours, points)} y1={H - PAD.b} y2={H - PAD.b + 5} className="chart-grid" />
+          <text x={px(tick.hours, points)} y={H - 28} textAnchor="middle" className="chart-label">{tick.label}</text>
+        </g>
       ))}
       <text x={(PAD.l + W - PAD.r) / 2} y={H - 7} textAnchor="middle" className="chart-axis-title">Hours before TCA</text>
       <g transform={`translate(26 ${(PAD.t + H - PAD.b) / 2}) rotate(-90)`}>
