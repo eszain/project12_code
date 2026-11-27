@@ -23,14 +23,14 @@ describe("maneuver options chart", () => {
     expect(section.getByText("Δv (cm/s)")).toBeTruthy();
     expect(section.getByText("Hours before TCA (log scale)")).toBeTruthy();
     expect(container.querySelectorAll("polyline")).toHaveLength(3);
-    expect(section.getByText("to reach 1 in 10k")).toBeTruthy();
-    expect(section.getByLabelText("Burns to reach 1 in 10k").querySelectorAll("tbody tr")).toHaveLength(8);
+    expect(section.getByText("to reach 0.01%")).toBeTruthy();
+    expect(section.getByLabelText("Burns to reach 0.01%").querySelectorAll("tbody tr")).toHaveLength(8);
     expect(section.getByText(/The lines are not straight/)).toBeTruthy();
   }, 30_000);
 
   it("shows only the reason for an event below the action level", async () => {
     const { container } = render(<ManeuverOptions cdm={load("reconstructed/cdm_set_6.json")} />);
-    expect(await screen.findByText(/Pc below the 1 in 10k maneuver-study threshold/)).toBeTruthy();
+    expect(await screen.findByText(/Pc below the 0.01% maneuver-study threshold/)).toBeTruthy();
     expect(container.querySelector("polyline")).toBeNull();
   });
 });

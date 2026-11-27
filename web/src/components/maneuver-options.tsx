@@ -6,7 +6,7 @@
 // satellite furthest. A study only: CADS never commands a spacecraft.
 
 import { useEffect, useState } from "react";
-import { formatShortOdds } from "@/lib/cads/analyze";
+import { formatPercent } from "@/lib/cads/analyze";
 import { maneuverOptionSpace, type IsoLine, type ManeuverSpace } from "@/lib/cads/maneuver-space";
 import type { NormalizedCdm } from "@/lib/cads/parser";
 
@@ -53,7 +53,7 @@ export function ManeuverOptions({ cdm }: { cdm: NormalizedCdm }) {
 
   // 2. One polyline per target, over the lead times where a burn of up to 1 m/s reaches it.
   const path = (l: IsoLine) => l.points.filter((p) => p.dvMs !== null).map((p) => `${px(p.leadTimeH)},${py(p.dvMs! * 100)}`).join(" ");
-  const summary = space.lines.map((l) => `to reach ${formatShortOdds(l.targetPc)}: ` + l.points.map((p) => `${p.leadTimeH.toFixed(1)} h ${p.dvMs === null ? "not reachable" : `${(p.dvMs * 100).toFixed(2)} cm/s`}`).join(", ")).join("; ");
+  const summary = space.lines.map((l) => `to reach ${formatPercent(l.targetPc)}: ` + l.points.map((p) => `${p.leadTimeH.toFixed(1)} h ${p.dvMs === null ? "not reachable" : `${(p.dvMs * 100).toFixed(2)} cm/s`}`).join(", ")).join("; ");
   const first = space.lines[0];
 
   return (
@@ -86,13 +86,13 @@ export function ManeuverOptions({ cdm }: { cdm: NormalizedCdm }) {
         {space.lines.map((l, i) => (
           <span key={l.targetPc} style={{ marginRight: 16 }}>
             <svg width="28" height="8" aria-hidden="true"><line x1="0" x2="28" y1="4" y2="4" className="chart-line" strokeDasharray={DASH[i % DASH.length]} /></svg>{" "}
-            to reach {formatShortOdds(l.targetPc)}
+            to reach {formatPercent(l.targetPc)}
           </span>
         ))}
       </div>
 
       {/* 5. Table for the first target. */}
-      <table className="ops-row" aria-label={`Burns to reach ${formatShortOdds(first.targetPc)}`}>
+      <table className="ops-row" aria-label={`Burns to reach ${formatPercent(first.targetPc)}`}>
         <thead>
           <tr><th>Hours before TCA</th><th>Burn (cm/s)</th><th>Direction</th><th>New miss (m)</th><th>Fuel (g)</th></tr>
         </thead>

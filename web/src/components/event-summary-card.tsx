@@ -1,6 +1,6 @@
 "use client";
 
-import { formatShortOdds, missComponentsM, phoneSummary, type EventAnalysis } from "@/lib/cads/analyze";
+import { formatPercent, missComponentsM, phoneSummary, type EventAnalysis } from "@/lib/cads/analyze";
 import type { NormalizedCdm, ObjectInfo } from "@/lib/cads/parser";
 import { lastObservations, positionSigmasM, type LastObservation } from "@/lib/cads/quality";
 import { CONFIG, latestRevision, type CdmEvent } from "@/lib/cads/store";
@@ -129,8 +129,8 @@ export function EventSummaryCard({
             {fmtHours(hoursBetween(now, c.tca))}
           </Metric>
           <Metric label="Miss distance">{fmtM(c.missDistanceM)}</Metric>
-          <Metric label="Collision chance (Pc)" note={<code>{c.pcRaw ?? ""}</code>}>
-            {c.pc === null ? <span className="ops-row-label">not provided</span> : formatShortOdds(c.pc)}
+          <Metric label="Collision chance (Pc)">
+            {c.pc === null ? <span className="ops-row-label">not provided</span> : formatPercent(c.pc)}
           </Metric>
       </dl>
       {analysis && (

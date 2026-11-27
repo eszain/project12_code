@@ -201,7 +201,7 @@ it("puts both history charts before the 2D and 3D players in the centre", async 
   expect(screen.getAllByText("Hours before TCA").length).toBeGreaterThan(0);
   expect(screen.getAllByText("Probability of collision (Pc)").length).toBeGreaterThan(0);
   expect(screen.getAllByText("Miss distance (m)").length).toBeGreaterThan(0);
-  expect(screen.getAllByText(/watch 1e-7, action 1e-4/i).length).toBeGreaterThan(0);
+  expect(screen.getAllByText(/watch 0\.00001%, action 0\.01%/i).length).toBeGreaterThan(0);
 });
 
 it("shows the empty-state explanation before event selection", async () => {

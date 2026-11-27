@@ -12,7 +12,8 @@ import { EncounterPictureCard } from "./encounter-picture";
 import { ExplanationCard } from "./explanation-card";
 import { SeverityLegend } from "./severity-legend";
 import { DEFAULT_FILTERS, PAGE_SIZE, filterAndSort, isArchived, paginate, statusCounts, type RegisterFilters } from "@/lib/cads/register";
-import { latestRevision } from "@/lib/cads/store";
+import { formatPercent } from "@/lib/cads/analyze";
+import { CONFIG, latestRevision } from "@/lib/cads/store";
 import { SCALE_BATCH, useCadsSession } from "./use-cads-session";
 import { hoursBetween } from "@/lib/cads/time";
 
@@ -120,7 +121,7 @@ export function CadsApp({ stepDelayMs = 900 }: { stepDelayMs?: number } = {}) {
 
         <section className="summary-grid" aria-label="Event summary">
           <SummaryCard label="Active events" value={pad2(counts.active)} detail={`${counts.archived} archived`} icon="◌" tone="cyan" />
-          <SummaryCard label="Above action level" value={actionCount === null ? "–" : pad2(actionCount)} detail={actionCount === null ? "Shown after the risk analysis" : "Pc of 1 in 10,000 or higher"} icon="!" tone="amber" />
+          <SummaryCard label="Above action level" value={actionCount === null ? "–" : pad2(actionCount)} detail={actionCount === null ? "Shown after the risk analysis" : `Pc of ${formatPercent(CONFIG.pcAction)} or higher`} icon="!" tone="amber" />
           <SummaryCard label="CDMs loaded" value={pad2(cdmCount)} detail="Loaded one at a time, oldest first" icon="↻" tone="purple" />
           <SummaryCard label="Next closest approach" value={nextTcaH === null ? "–" : `${nextTcaH.toFixed(1)} h`} detail={nextTcaH === null ? "No upcoming encounters" : "Soonest upcoming TCA"} icon="◷" tone="green" />
         </section>

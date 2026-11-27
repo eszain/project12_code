@@ -14,45 +14,25 @@ export interface EventAnalysis {
 }
 
 // A CDM Pc of exactly 0 means the source rounded a very small chance down, not that a collision is impossible:
-// the positions are uncertain, so the true chance is never zero (CSA, Nov 6). Show it as below 1 in a billion,
-// the same floor used for any very small Pc. Severity still treats a source 0 as its own band.
+// the positions are uncertain, so the true chance is never zero (CSA, Nov 6). It is shown as "less than 0.0000001%",
+// the same floor used for any very small Pc (see formatPercent). Severity still treats a source 0 as its own band.
 export const ZERO_PC_PERCENT = "less than 0.0000001%";
 
-export function formatOdds(pc: number | null | undefined): string {
-  if (pc === null || pc === undefined) return "not provided";
-  if (pc === 0) return `${ZERO_PC_PERCENT} (reported as 0 in the CDM)`;
-  if (pc >= 1) return "100% (guaranteed collision)";
-  const oneInN = Math.round(1 / pc);
-  const pct = pc * 100;
-  if (oneInN >= 1_000_000_000) return "less than 1 in 1 billion (practically zero)";
-  if (oneInN >= 1_000_000) {
-    const m = (oneInN / 1_000_000).toFixed(1).replace(/\.0$/, "");
-    return `1 in ${m} million (less than 0.001%)`;
-  }
-  if (oneInN >= 100_000) {
-    const k = Math.round(oneInN / 1000);
-    return `1 in ${k}k (less than 0.001%)`;
-  }
-  if (oneInN >= 10_000) {
-    return `1 in ${oneInN.toLocaleString()} (${pct < 0.01 ? pct.toFixed(3) : pct.toFixed(2)}%)`;
-  }
-  return `1 in ${oneInN.toLocaleString()} (${pct.toFixed(2)}%)`;
-}
+/** A probability below this reads "< 0.0000001%". It also stands in for a CDM value of exactly 0. */
+export const PC_PERCENT_FLOOR = 1e-9;
 
-export function formatShortOdds(pc: number | null | undefined): string {
-  if (pc === null || pc === undefined) return "n/a";
-  if (pc === 0) return "< 0.0000001%";
+/**
+ * A collision probability as a percentage, always: "0.039%", "0.0000029%", "100%". Two significant digits. It is never
+ * "0": anything below 0.0000001% (including a CDM Pc of exactly 0) reads "< 0.0000001%", because the positions are
+ * uncertain and the true chance is never exactly zero (CSA, Nov 6 and Nov 13).
+ */
+export function formatPercent(pc: number | null | undefined): string {
+  if (pc === null || pc === undefined || Number.isNaN(pc)) return "not provided";
+  if (pc < PC_PERCENT_FLOOR) return "< 0.0000001%";
   if (pc >= 1) return "100%";
-  const oneInN = Math.round(1 / pc);
-  if (oneInN >= 1_000_000_000) return "< 1 in 1B";
-  if (oneInN >= 1_000_000) {
-    const m = (oneInN / 1_000_000).toFixed(1).replace(/\.0$/, "");
-    return `1 in ${m}M`;
-  }
-  if (oneInN >= 10_000) {
-    return `1 in ${(oneInN / 1000).toFixed(1).replace(/\.0$/, "")}k`;
-  }
-  return `1 in ${oneInN.toLocaleString()}`;
+  const pct = pc * 100;
+  const decimals = Math.min(20, Math.max(0, 1 - Math.floor(Math.log10(pct)))); // two significant digits
+  return `${pct.toFixed(decimals).replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "")}%`;
 }
 
 /** Miss distance split into radial / in-track / cross-track magnitudes in metres, or null if the CDM has no relative position. */
@@ -67,7 +47,7 @@ export function phoneSummary(cdm: NormalizedCdm, nowMs: number): string {
   const name = (o: NormalizedCdm["sat1"]) => (o.objectType?.toUpperCase().includes("DEBRIS") ? `${o.name ?? o.designator} (debris)` : (o.name ?? o.designator));
   const h = (cdm.tca - nowMs) / 3600000;
   const when = h >= 0 ? `closest approach in ${h.toFixed(1)} hours` : `closest approach was ${(-h).toFixed(1)} hours ago`;
-  const pc = cdm.pc === null ? "collision chance not provided" : `collision chance ${formatShortOdds(cdm.pc)}`;
+  const pc = cdm.pc === null ? "collision chance not provided" : `collision chance ${formatPercent(cdm.pc)}`;
   return `${name(cdm.sat1)} and ${name(cdm.sat2)}: ${when}, ${pc}.`;
 }
 
@@ -104,19 +84,19 @@ export function analyzeEvent(event: CdmEvent, nowMs: number): EventAnalysis {
     );
   } else if (pc >= CONFIG.pcAction) {
     why.push(
-      `Severity: ACTION — High Collision Danger. The collision chance is ${formatOdds(pc)} (source Pc: ${cdm.pcRaw}), which exceeds our safety threshold of 1 in 10,000. In space flight, odds higher than 1 in 10,000 are unacceptable risk, so operators must take action to steer the satellite away.`
+      `Severity: ACTION — High Collision Danger. The collision chance is ${formatPercent(pc)}, which exceeds our safety threshold of ${formatPercent(CONFIG.pcAction)}. In space flight, a chance higher than ${formatPercent(CONFIG.pcAction)} is unacceptable risk, so operators must take action to steer the satellite away.`
     );
   } else if (pc >= CONFIG.pcWatch) {
     why.push(
-      `Severity: WATCH — Elevated Risk (Monitoring). The collision chance is ${formatOdds(pc)} (source Pc: ${cdm.pcRaw}). This is below the action cutoff (1 in 10,000) but above the watch level (1 in 10 million). No immediate maneuver is needed, but operators must closely monitor upcoming tracking passes.`
+      `Severity: WATCH — Elevated Risk (Monitoring). The collision chance is ${formatPercent(pc)}. This is below the action cutoff (${formatPercent(CONFIG.pcAction)}) but above the watch level (${formatPercent(CONFIG.pcWatch)}). No immediate maneuver is needed, but operators must closely monitor upcoming tracking passes.`
     );
   } else if (pc === 0) {
     why.push(
-      `Severity: ZERO — Clear. Latest CDM reports Pc exactly 0, which means a chance ${ZERO_PC_PERCENT}: far too small to report, though never truly zero because the positions are uncertain. No maneuver or action is needed.`
+      `Severity: ZERO — Clear. The latest CDM reports a chance too small to measure, which CADS shows as ${ZERO_PC_PERCENT}. It is never truly zero, because the positions are uncertain. No maneuver or action is needed.`
     );
   } else {
     why.push(
-      `Severity: LOW — Safe Pass. The collision chance is ${formatOdds(pc)} (source Pc: ${cdm.pcRaw}), well below 1 in 10 million. The satellites will safely pass each other with negligible risk.`
+      `Severity: LOW — Safe Pass. The collision chance is ${formatPercent(pc)}, well below ${formatPercent(CONFIG.pcWatch)}. The satellites will safely pass each other with negligible risk.`
     );
   }
 
@@ -150,16 +130,16 @@ export function analyzeEvent(event: CdmEvent, nowMs: number): EventAnalysis {
 
   // 4. Update History & Trend
   if (event.revisions.length > 1) {
-    const revOdds = event.revisions.map((r) => formatShortOdds(r.cdm.pc));
+    const revOdds = event.revisions.map((r) => formatPercent(r.cdm.pc));
     const firstPc = event.revisions[0].cdm.pc;
     const latestPc = cdm.pc;
-    let trendDesc = `Across ${event.revisions.length} radar updates, collision odds evolved: ${revOdds.join(" -> ")}.`;
+    let trendDesc = `Across ${event.revisions.length} radar updates, collision chance evolved: ${revOdds.join(" -> ")}.`;
     if (latestPc === 0 && firstPc !== 0) {
-      trendDesc = `Across ${event.revisions.length} radar updates, collision odds dropped to zero (${revOdds.join(" -> ")}). Updated radar tracking confirmed the objects will safely miss each other.`;
+      trendDesc = `Across ${event.revisions.length} radar updates, collision chance dropped to ${formatPercent(latestPc)} (${revOdds.join(" -> ")}). Updated radar tracking confirmed the objects will safely miss each other.`;
     } else if (latestPc !== null && firstPc !== null && latestPc > firstPc) {
-      trendDesc = `Across ${event.revisions.length} radar updates, collision odds increased (${revOdds.join(" -> ")}). As the flyby draws nearer, newer tracking data sharpens and confirms danger has risen.`;
+      trendDesc = `Across ${event.revisions.length} radar updates, collision chance increased (${revOdds.join(" -> ")}). As the flyby draws nearer, newer tracking data sharpens and confirms danger has risen.`;
     } else if (latestPc !== null && firstPc !== null && latestPc < firstPc) {
-      trendDesc = `Across ${event.revisions.length} radar updates, collision odds decreased (${revOdds.join(" -> ")}). Additional tracking data showed the objects are further apart than first estimated.`;
+      trendDesc = `Across ${event.revisions.length} radar updates, collision chance decreased (${revOdds.join(" -> ")}). Additional tracking data showed the objects are further apart than first estimated.`;
     }
     why.push(`Risk Trend: ${trendDesc}`);
   } else {
@@ -172,7 +152,7 @@ export function analyzeEvent(event: CdmEvent, nowMs: number): EventAnalysis {
   const rec = recalculate(cdm, CONFIG.defaultHbrM);
   if (rec.available) {
     why.push(
-      `Independent Math Check: Our internal Foster-1992 2D calculation estimates the risk at ${formatOdds(rec.recalculatedPc)}, validating the official radar agency's figures.`
+      `Independent Math Check: Our internal Foster-1992 2D calculation estimates the risk at ${formatPercent(rec.recalculatedPc)}, validating the official radar agency's figures.`
     );
   } else {
     why.push(`Independent Math Check: Recalculation unavailable (${rec.reason}).`);

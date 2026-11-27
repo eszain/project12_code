@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { analyzeEvent, formatDistance, missComponentsM, phoneSummary, formatOdds, formatShortOdds, formatSpeed } from "./analyze";
+import { analyzeEvent, formatDistance, missComponentsM, phoneSummary, formatPercent, formatSpeed } from "./analyze";
 import { groupMessages } from "./correlation";
 import { SCALE_NOTE, generateScaleDocs, loadDemoDocuments, sortByCreation } from "./demo";
 import { tradeStudy } from "./maneuver";
@@ -304,26 +304,34 @@ it("keeps the same event groups when CDMs arrive in any order", () => {
     expect(action.why.some((w) => w.includes("The Math in Simple Terms"))).toBe(true);
     expect(action.why.some((w) => w.includes("ACTION — High Collision Danger"))).toBe(true);
     expect(action.why.some((w) => w.includes("uncertainty cloud"))).toBe(true);
-    expect(action.why.some((w) => w.includes("1 in 10,000"))).toBe(true);
-    expect(action.why.some((w) => w.includes("1 in 2,571"))).toBe(true);
+    expect(action.why.some((w) => w.includes("0.01%"))).toBe(true);
+    expect(action.why.some((w) => w.includes("0.039%"))).toBe(true);
     expect(action.why.some((w) => w.includes("Flyby Timing"))).toBe(true);
     expect(action.why.some((w) => w.includes("Risk Trend"))).toBe(true);
 
     const zero = sev.find((x) => x.severity === "ZERO")!;
-    expect(zero.why.some((w) => w.includes("Latest CDM reports Pc exactly 0"))).toBe(true);
+    expect(zero.why.some((w) => w.includes("too small to measure"))).toBe(true);
     expect(zero.why.some((w) => w.includes("barely overlap"))).toBe(true);
     expect(zero.why.join(" ")).not.toContain(" 0%");
+    expect(action.why.join(" ")).not.toMatch(/1 in [0-9]|source Pc|E-0/);
   });
 
-  it("formats odds, distances, and speeds for a non-technical audience", () => {
-    expect(formatOdds(0)).toBe("less than 0.0000001% (reported as 0 in the CDM)");
-    expect(formatOdds(3.888786e-4)).toBe("1 in 2,571 (0.04%)");
-    expect(formatOdds(1e-6)).toBe("1 in 1 million (less than 0.001%)");
-    expect(formatShortOdds(3.888786e-4)).toBe("1 in 2,571");
-    expect(formatShortOdds(0)).toBe("< 0.0000001%");
-    expect(formatShortOdds(7.665263e-9)).toBe("1 in 130.5M"); // below a billion: unchanged
-    expect(formatShortOdds(6.12e-12)).toBe("< 1 in 1B"); // very small values stay short enough for a card
-    expect(formatOdds(6.12e-12)).toBe("less than 1 in 1 billion (practically zero)");
+  it("shows every probability as a percentage, and never as zero", () => {
+    expect(formatPercent(3.888786e-4)).toBe("0.039%");
+    expect(formatPercent(1.809048e-4)).toBe("0.018%");
+    expect(formatPercent(1e-4)).toBe("0.01%"); // the action level
+    expect(formatPercent(1e-7)).toBe("0.00001%"); // the watch level
+    expect(formatPercent(1.009416e-6)).toBe("0.0001%");
+    expect(formatPercent(2.885737e-8)).toBe("0.0000029%");
+    expect(formatPercent(7.665263e-9)).toBe("0.00000077%");
+    expect(formatPercent(0.05)).toBe("5%");
+    expect(formatPercent(0.123)).toBe("12%");
+    expect(formatPercent(1)).toBe("100%");
+    expect(formatPercent(null)).toBe("not provided");
+    // A CDM Pc of exactly 0, or anything below the floor, reads as a very small chance, not zero.
+    for (const tiny of [0, 1e-30, 9.99e-10, 6.12e-12]) expect(formatPercent(tiny)).toBe("< 0.0000001%");
+    expect(formatPercent(1e-9)).toBe("0.0000001%");
+    for (const v of [0, 1e-30, 1e-9, 7.665263e-9, 1e-6, 3.888786e-4, 0.05, 1]) expect(formatPercent(v)).not.toMatch(/^0(\.0+)?%$|1 in|e-/i);
     expect(formatDistance(62)).toContain("football field");
     expect(formatSpeed(12793)).toContain("Mach");
   });
@@ -591,7 +599,7 @@ describe("operator phone summary (C1)", () => {
     const x = c();
     const text = phoneSummary(x, x.tca - 13 * H);
     expect(text).toContain("closest approach in 13.0 hours");
-    expect(text).toContain(`collision chance ${formatShortOdds(x.pc)}`);
+    expect(text).toContain(`collision chance ${formatPercent(x.pc)}`);
     expect(text).toContain(x.sat1.name ?? x.sat1.designator);
     expect(text).toContain(x.sat2.name ?? x.sat2.designator);
   });
@@ -634,8 +642,8 @@ describe("severity bands and action labels (G7, G8)", () => {
   });
   it("states the limits from CONFIG in plain words, so the legend cannot drift from the rating", () => {
     const [action, watch] = severityBands();
-    expect(action.range).toBe("Pc of 1 in 10,000 or higher");
-    expect(watch.range).toBe("Pc from 1 in 10,000,000 up to 1 in 10,000");
+    expect(action.range).toBe("Pc of 0.01% or higher");
+    expect(watch.range).toBe("Pc from 0.00001% up to 0.01%");
   });
   it("gives every severity an action label, and only ACTION asks for a maneuver", () => {
     expect(actionLabel("ACTION")).toMatch(/maneuver/i);

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { formatShortOdds, missComponentsM } from "./analyze";
+import { formatPercent, missComponentsM } from "./analyze";
 import { missVsUncertainty } from "./details";
 import { expandedPc } from "./pc-methods";
 import { positionSigmasM } from "./quality";
@@ -36,9 +36,9 @@ describe("risk analysis checks (issue #9)", () => {
   });
 
   it("7. gives the maneuver options only for events at the action level", () => {
-    expect(result("Maneuver options")).toMatch(/^Study only\. Δv to reach 1 in 10k: [\d.]+ cm\/s -in-track at TCA−0\.8 h \(½ orbit\); [\d.]+ cm\/s \+in-track at TCA−48 h$/);
+    expect(result("Maneuver options")).toMatch(/^Study only\. Δv to reach 0\.01%: [\d.]+ cm\/s -in-track at TCA−0\.8 h \(½ orbit\); [\d.]+ cm\/s \+in-track at TCA−48 h$/);
     const [clear] = load([["reconstructed", "cdm_set_6.json"]]);
-    expect(riskChecks(clear, 0)[6].result).toBe("Not generated: Pc below the 1 in 10k maneuver-study threshold");
+    expect(riskChecks(clear, 0)[6].result).toBe("Not generated: Pc below the 0.01% maneuver-study threshold");
   });
 
   it("5. compares the altitude difference with the altitude uncertainty", () => {
@@ -53,16 +53,16 @@ describe("risk analysis checks (issue #9)", () => {
   it("6. reports the worst case of the three Pc methods and its zone", () => {
     const e = expandedPc(latestRevision(test).cdm);
     if (!e.available) throw new Error(e.reason);
-    expect(result("Expanded Pc")).toMatch(/^RED: worst case 1 in [\d,]+ \(/);
-    expect(result("Expanded Pc")).toContain(formatShortOdds(e.worst.pc));
+    expect(result("Expanded Pc")).toMatch(/^RED: worst case [\d.]+% \(/);
+    expect(result("Expanded Pc")).toContain(formatPercent(e.worst.pc));
   });
 
   it("1. rates the CDM's Pc against the action level", () => {
-    expect(result("Pc level")).toBe("1 in 2,571, at or above action limit 1 in 10k: ACTION");
+    expect(result("Pc level")).toBe("0.039%, at or above action limit 0.01%: ACTION");
   });
 
   it("2. compares the latest Pc with the previous CDM", () => {
-    expect(result("Pc trend")).toBe("Rising: 1 in 5,528 → 1 in 2,571");
+    expect(result("Pc trend")).toBe("Rising: 0.018% → 0.039%");
   });
 
   it("3. divides the miss distance by the uncertainty, matching the dashboard's comparison", () => {

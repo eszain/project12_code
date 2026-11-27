@@ -1,8 +1,8 @@
 "use client";
 
 import { Latex } from "@/components/latex";
-import { ZERO_PC_PERCENT, formatDistance, formatOdds, formatSpeed, type EventAnalysis } from "@/lib/cads/analyze";
-import { latestRevision, type CdmEvent } from "@/lib/cads/store";
+import { PC_PERCENT_FLOOR, ZERO_PC_PERCENT, formatDistance, formatPercent, formatSpeed, type EventAnalysis } from "@/lib/cads/analyze";
+import { CONFIG, latestRevision, type CdmEvent } from "@/lib/cads/store";
 import { SeverityBadge } from "./severity-badge";
 import { hoursBetween } from "@/lib/cads/time";
 
@@ -26,8 +26,11 @@ export function ExplanationCard({
   const hours = hoursBetween(now, latest.tca);
   const timingText = hours >= 0 ? `in ${hours.toFixed(1)} hours` : `passed ${(-hours).toFixed(1)} hours ago`;
 
-  const oneInN = pc && pc > 0 ? Math.round(1 / pc) : null;
-  const pctStr = pc && pc > 0 ? (pc * 100 < 0.01 ? (pc * 100).toFixed(3) : (pc * 100).toFixed(2)) + "%" : ZERO_PC_PERCENT;
+  // Every probability is a percentage. In formulas, the percent sign is escaped for LaTeX.
+  const tex = (p: number) => formatPercent(p).replace("%", "\\%");
+  const pcTex = pc !== null && pc >= PC_PERCENT_FLOOR ? `= ${tex(pc)}` : `< ${tex(PC_PERCENT_FLOOR)}`;
+  const actionPct = formatPercent(CONFIG.pcAction);
+  const watchPct = formatPercent(CONFIG.pcWatch);
 
   return (
     <section className="detail-panel ops-panel ops-explain" aria-labelledby="explanation-heading">
@@ -60,25 +63,25 @@ export function ExplanationCard({
                 {analysis.severity === "ACTION" && (
                   <>
                     {cautiousLanguage ? (
-                      <><strong>Action-band Pc.</strong> The reported collision probability is <strong>{formatOdds(pc)}</strong>. It meets the <strong>1 in 10,000</strong> action level and requires specialist review; CADS does not command a maneuver.</>
+                      <><strong>Action-band Pc.</strong> The reported collision probability is <strong>{formatPercent(pc)}</strong>. It meets the <strong>{actionPct}</strong> action level and requires specialist review; CADS does not command a maneuver.</>
                     ) : (
-                      <><strong>High Danger.</strong> The chance of these two objects crashing is <strong>{formatOdds(pc)}</strong>. In space flight, any chance worse than <strong>1 in 10,000</strong> is unacceptable risk. Operators must plan a steering burn to dodge it.</>
+                      <><strong>High Danger.</strong> The chance of these two objects crashing is <strong>{formatPercent(pc)}</strong>. In space flight, any chance worse than <strong>{actionPct}</strong> is unacceptable risk. Operators must plan a steering burn to dodge it.</>
                     )}
                   </>
                 )}
                 {analysis.severity === "WATCH" && (
                   <>
                     {cautiousLanguage ? (
-                      <><strong>Elevated Watch.</strong> The reported collision probability is <strong>{formatOdds(pc)}</strong> (between 1 in 10,000 and 1 in 10 million). Continue monitoring; this value alone is not a safety guarantee or maneuver decision.</>
+                      <><strong>Elevated Watch.</strong> The reported collision probability is <strong>{formatPercent(pc)}</strong> (between {watchPct} and {actionPct}). Continue monitoring; this value alone is not a safety guarantee or maneuver decision.</>
                     ) : (
-                      <><strong>Elevated Watch.</strong> The collision chance is <strong>{formatOdds(pc)}</strong> (between 1 in 10,000 and 1 in 10 million). It is safe for now, but operators must keep watching future radar updates.</>
+                      <><strong>Elevated Watch.</strong> The collision chance is <strong>{formatPercent(pc)}</strong> (between {watchPct} and {actionPct}). It is safe for now, but operators must keep watching future radar updates.</>
                     )}
                   </>
                 )}
                 {analysis.severity === "ZERO" && (
                   <>
                     {cautiousLanguage ? (
-                      <><strong>Reported Pc is zero.</strong> This CDM reports a collision probability of 0, which means <strong>{ZERO_PC_PERCENT}</strong>. That source value is not a guarantee; review positional uncertainty and later updates.</>
+                      <><strong>Very small reported Pc.</strong> This CDM reports a collision probability too small to measure, which CADS shows as <strong>{ZERO_PC_PERCENT}</strong>. That source value is not a guarantee; review positional uncertainty and later updates.</>
                     ) : (
                       <><strong>Practically no risk.</strong> The probability of collision is <strong>{ZERO_PC_PERCENT}</strong>. Both satellites are safely apart.</>
                     )}
@@ -87,9 +90,9 @@ export function ExplanationCard({
                 {analysis.severity === "LOW" && (
                   <>
                     {cautiousLanguage ? (
-                      <><strong>Low reported Pc.</strong> The reported collision probability is <strong>{formatOdds(pc)}</strong> (less than 1 in 10 million). Treat it as a low reported value, not a guarantee of a safe pass.</>
+                      <><strong>Low reported Pc.</strong> The reported collision probability is <strong>{formatPercent(pc)}</strong> (less than {watchPct}). Treat it as a low reported value, not a guarantee of a safe pass.</>
                     ) : (
-                      <><strong>Safe Pass.</strong> The collision chance is <strong>{formatOdds(pc)}</strong> (less than 1 in 10 million). The risk is negligible.</>
+                      <><strong>Safe Pass.</strong> The collision chance is <strong>{formatPercent(pc)}</strong> (less than {watchPct}). The risk is negligible.</>
                     )}
                   </>
                 )}
@@ -132,23 +135,19 @@ export function ExplanationCard({
                 </div>
 
                 <div className="rounded border bg-muted/40 p-2.5 space-y-1">
-                  <div className="text-[11px] text-muted-foreground font-medium">2. Collision Odds (Pc)</div>
+                  <div className="text-[11px] text-muted-foreground font-medium">2. Collision Chance (Pc)</div>
                   <div className="text-sm font-semibold text-foreground py-0.5">
-                    {pc === 0 ? (
-                      <Latex math="P_c < 10^{-9}" />
-                    ) : (
-                      <Latex math={`P_c = \\frac{1}{${oneInN?.toLocaleString()}}`} />
-                    )}
+                    <Latex math={`P_c ${pcTex}`} />
                   </div>
-                  <p className="text-[11px] text-muted-foreground">Chance of touching ({pctStr})</p>
+                  <p className="text-[11px] text-muted-foreground">Chance of the two objects touching</p>
                 </div>
 
                 <div className="rounded border bg-muted/40 p-2.5 space-y-1">
                   <div className="text-[11px] text-muted-foreground font-medium">3. Safety Limit</div>
                   <div className="text-sm font-semibold text-foreground py-0.5">
-                    <Latex math="P_{\text{limit}} = \frac{1}{10{,}000}" />
+                    <Latex math={`P_{\\text{limit}} = ${tex(CONFIG.pcAction)}`} />
                   </div>
-                  <p className="text-[11px] text-muted-foreground">Action threshold (0.01%)</p>
+                  <p className="text-[11px] text-muted-foreground">Action threshold</p>
                 </div>
               </div>
 
@@ -158,10 +157,10 @@ export function ExplanationCard({
                   <div className="space-y-1.5">
                     <Latex
                       block
-                      math={`\\text{${cautiousLanguage ? "Reported Pc" : "Our Risk"}: } \\frac{1}{${oneInN?.toLocaleString()}} \\quad > \\quad \\text{${cautiousLanguage ? "Action Level" : "Safety Limit"}: } \\frac{1}{10{,}000} \\implies \\textbf{${cautiousLanguage ? "SPECIALIST REVIEW" : "ACTION REQUIRED"}}`}
+                      math={`\\text{${cautiousLanguage ? "Reported Pc" : "Our Risk"}: } ${tex(pc ?? 0)} \\quad > \\quad \\text{${cautiousLanguage ? "Action Level" : "Safety Limit"}: } ${tex(CONFIG.pcAction)} \\implies \\textbf{${cautiousLanguage ? "SPECIALIST REVIEW" : "ACTION REQUIRED"}}`}
                     />
                     <p className="text-[11px] text-muted-foreground">
-                      {cautiousLanguage ? "The reported Pc is above the action level; a specialist must review the CDM and operational context before any decision." : `Because 1 in ${oneInN?.toLocaleString()} is a higher risk than the 1 in 10,000 safety threshold, operators must maneuver.`}
+                      {cautiousLanguage ? "The reported Pc is above the action level; a specialist must review the CDM and operational context before any decision." : `Because ${formatPercent(pc)} is a higher risk than the ${actionPct} safety threshold, operators must maneuver.`}
                     </p>
                   </div>
                 )}
@@ -169,10 +168,10 @@ export function ExplanationCard({
                   <div className="space-y-1.5">
                     <Latex
                       block
-                      math={`d = ${missM.toFixed(0)}\\text{ m} \\gg 10\\text{ m} \\implies P_c < 10^{-9} \\implies \\textbf{${cautiousLanguage ? "REPORTED Pc = 0" : "PRACTICALLY NO RISK"}}`}
+                      math={`d = ${missM.toFixed(0)}\\text{ m} \\gg 10\\text{ m} \\implies P_c < ${tex(PC_PERCENT_FLOOR)} \\implies \\textbf{${cautiousLanguage ? "VERY SMALL REPORTED Pc" : "PRACTICALLY NO RISK"}}`}
                     />
                     <p className="text-[11px] text-muted-foreground">
-                      {cautiousLanguage ? `The distance (${missM.toFixed(0)} meters) is compared with object size in this reading aid. The source Pc is 0 for this update, which means ${ZERO_PC_PERCENT}; that does not replace uncertainty review.` : `The distance (${missM.toFixed(0)} meters) is hundreds of times larger than the satellites. The chance is ${ZERO_PC_PERCENT}, so no move is needed.`}
+                      {cautiousLanguage ? `The distance (${missM.toFixed(0)} meters) is compared with object size in this reading aid. The source Pc is too small to measure for this update, which CADS shows as ${ZERO_PC_PERCENT}; that does not replace uncertainty review.` : `The distance (${missM.toFixed(0)} meters) is hundreds of times larger than the satellites. The chance is ${ZERO_PC_PERCENT}, so no move is needed.`}
                     </p>
                   </div>
                 )}
@@ -180,7 +179,7 @@ export function ExplanationCard({
                   <div className="space-y-1.5">
                     <Latex
                       block
-                      math={`\\frac{1}{10{,}000{,}000} \\le P_c = \\frac{1}{${oneInN?.toLocaleString()}} < \\frac{1}{10{,}000} \\implies \\textbf{WATCH}`}
+                      math={`${tex(CONFIG.pcWatch)} \\le P_c = ${tex(pc ?? 0)} < ${tex(CONFIG.pcAction)} \\implies \\textbf{WATCH}`}
                     />
                     <p className="text-[11px] text-muted-foreground">
                       {cautiousLanguage ? "The reported Pc is elevated but below the action level; keep monitoring upcoming radar passes." : "Risk is elevated but not critical. Keep monitoring upcoming radar passes."}
@@ -191,10 +190,10 @@ export function ExplanationCard({
                   <div className="space-y-1.5">
                     <Latex
                       block
-                      math={`P_c < \\frac{1}{10{,}000{,}000} \\implies \\textbf{${cautiousLanguage ? "BELOW WATCH LEVEL" : "LOW RISK"}}`}
+                      math={`P_c < ${tex(CONFIG.pcWatch)} \\implies \\textbf{${cautiousLanguage ? "BELOW WATCH LEVEL" : "LOW RISK"}}`}
                     />
                     <p className="text-[11px] text-muted-foreground">
-                      {cautiousLanguage ? "The reported Pc is less than 1 in 10 million; continue to interpret it with positional uncertainty and future updates." : "Collision chance is less than 1 in 10 million. Safe pass."}
+                      {cautiousLanguage ? `The reported Pc is less than ${watchPct}; continue to interpret it with positional uncertainty and future updates.` : `Collision chance is less than ${watchPct}. Safe pass.`}
                     </p>
                   </div>
                 )}
